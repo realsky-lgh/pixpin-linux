@@ -57,6 +57,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
@@ -93,4 +94,5 @@ private:
     AnnotationLayer *m_annotations = nullptr;
 
     const int m_handleSize = 8;
+    int m_wheelAccumulator = 0;
 };

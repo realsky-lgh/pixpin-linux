@@ -119,6 +119,6 @@ void MagnifierWidget::paintEvent(QPaintEvent *) {
 
     // Shape mode indicator
     p.setPen(QColor(0, 180, 255));
-    QString shapeStr = (m_selectionShape == SelectionShape::Rectangle) ? "选区: 矩形 (Tab切换)" : "选区: 椭圆/圆 (Tab切换)";
+    QString shapeStr = (m_selectionShape == SelectionShape::Rectangle) ? "选区: 矩形 (Tab/滚轮切换)" : "选区: 椭圆/圆 (Tab/滚轮切换)";
     p.drawText(10, 203, shapeStr);
 }

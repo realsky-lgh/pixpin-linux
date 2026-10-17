@@ -4,6 +4,7 @@
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QWheelEvent>
 #include <QApplication>
 #include <QClipboard>
 #include <QFileDialog>
@@ -472,6 +473,25 @@ void CaptureOverlay::keyPressEvent(QKeyEvent *event) {
     } else {
         QWidget::keyPressEvent(event);
     }
+}
+
+void CaptureOverlay::wheelEvent(QWheelEvent *event) {
+    if (m_state != CaptureState::Annotating) {
+        int delta = event->angleDelta().y();
+        if (delta == 0) {
+            delta = event->angleDelta().x();
+        }
+        if (delta != 0) {
+            m_wheelAccumulator += delta;
+            if (qAbs(m_wheelAccumulator) >= 120) {
+                toggleSelectionShape();
+                m_wheelAccumulator = 0;
+            }
+            event->accept();
+            return;
+        }
+    }
+    QWidget::wheelEvent(event);
 }
 
 QPixmap CaptureOverlay::getComposedPixmap(bool highRes) const {
