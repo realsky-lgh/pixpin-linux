@@ -1,19 +1,20 @@
 [Desktop Entry]
 Name=PixPin Linux
 GenericName=Screenshot & Pin Tool
-Comment=智能截图、贴图与离线 OCR 工具 (PixPin Linux 复刻版)
-Exec=/home/realsky/pixpin-linux/build/pixpin_linux
-Icon=/home/realsky/pixpin-linux/pixpin.svg
+Comment=智能截图、贴图与离线 OCR 工具 (PixPin Linux 原生版)
+Exec=pixpin
+Icon=pixpin
 Terminal=false
 Type=Application
 Categories=Utility;Graphics;
-Keywords=screenshot;pin;ocr;capture;
+Keywords=screenshot;pin;ocr;capture;pixpin;
+StartupNotify=false
 Actions=Capture;Pin;
 
 [Desktop Action Capture]
-Name=截取屏幕
-Exec=/home/realsky/pixpin-linux/build/pixpin_linux --capture
+Name=截取屏幕 (Capture)
+Exec=pixpin --capture
 
 [Desktop Action Pin]
-Name=贴剪贴板图片
-Exec=/home/realsky/pixpin-linux/build/pixpin_linux --pin
+Name=贴剪贴板图片 (Pin)
+Exec=pixpin --pin

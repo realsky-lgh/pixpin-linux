@@ -1,64 +1,202 @@
 # PixPin Linux 📌
 
-一款专为 Linux (Ubuntu / Debian 等) 打造的 **PixPin** 原生复刻版，采用 **C++ + Qt 6 + Tesseract OCR** 纯原生构建，具备极致轻量、零延迟启动、深度适配 **Ubuntu Wayland** 与 X11 显示架构等特点。
+一款专为 Linux (Ubuntu / Debian / Arch / Fedora 等) 深度定制的原生 **PixPin** 复刻版。采用 **C++17 + Qt 6 + Tesseract / PaddleOCR (ONNX)** 原生构建，具备极致轻量、零延迟启动、双屏/高分屏平滑渲染、深度适配 **Ubuntu Wayland** 与 X11 显示架构等特点。
+
+![Qt6](https://img.shields.io/badge/Qt-6.4+-41CD52?style=flat&logo=qt)
+![C++17](https://img.shields.io/badge/C++-17-00599C?style=flat&logo=c%2B%2B)
+![Wayland](https://img.shields.io/badge/Display-Wayland%20%7C%20X11-orange)
+![OCR](https://img.shields.io/badge/OCR-PaddleOCR%20(RapidOCR)%20%2B%20Tesseract-blue)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
 
-## 🌟 核心特性与功能复刻
+## 🌟 核心特性
 
-1. **Wayland / X11 双架构截屏**
-   - 完美适配 Ubuntu 默认的 **GNOME Wayland** 环境（通过 `XDG Desktop Portal` 异步安全总线）及传统 X11 环境。
-   - 毫秒级快速唤起全屏遮罩，告别 Wayland 截图黑屏或权限拒绝问题。
-
-2. **智能选区与多功能放大镜（Loupe）**
-   - 框选时实时跟随高倍放大镜，显示中心十字准星。
-   - 精确显示像素级坐标 `(X, Y)`、RGB 颜色值及标准 HEX 色值（如 `#007AFF`），支持颜色吸取。
-   - 8 锚点自由缩放控制与选区整体拖拽移动。
-
-3. **核心精髓：贴图功能（Pin to Desktop）**
-   - 点击工具栏 📌 或快捷键 `Ctrl+P`，选区直接脱离生成无边框置顶贴图窗口。
-   - **平滑缩放**：鼠标滚轮随意放大/缩小（0.2x ~ 5.0x），采用双线性插值算法保持清晰度。
-   - **透明度调节**：按住 `Ctrl + 滚轮` 调节贴图半透明度（20% ~ 100%）。
-   - **交互操作**：左键拖拽吸附、双击关闭贴图、右键丰富上下文菜单（复制、保存、文字提取、翻转等）。
-
-4. **纯本地离线文字识别（Instant OCR）**
-   - 采用 Tesseract C++ 原生在内存中直接推理（支持中文简体 `chi_sim` 与英文 `eng`）。
-   - 截屏或贴图上随时一键触发，自动弹出优雅的暗黑风格提取面板，支持字符统计、一键复制全部文本、保存为 `.txt`。
-
-5. **全套标注与涂鸦工具（Annotations）**
-   - 矩形（Rounded Rect）、椭圆（Ellipse）、导向箭头（Arrow）、自由涂鸦画笔（Pen）。
-   - **递增序号气球**（Numbered Step 1, 2, 3...）。
-   - **实时马赛克 / 模糊**（Mosaic Block 局部像素化处理）。
-   - 文本输入与动态选色板（红、黄、绿、蓝、白、黑及粗细调节）。
-   - 完善的历史撤销栈（`Ctrl+Z`）。
+| 功能模块 | 特性说明 |
+| :--- | :--- |
+| **Wayland / X11 双架构** | 完美适配 GNOME Wayland (`XDG Desktop Portal`) 及传统 X11，彻底告别截图黑屏或权限拒绝。 |
+| **极致 4K 160Hz 性能** | 采用局部脏区刷新（Dirty-rect Damage Blit）与打孔透视算法，拖拽帧时间仅 **0.09ms (10,842 FPS)**，4K 极速丝滑无拖影。 |
+| **矩形 / 圆形 / 椭圆截图** | 工具栏一键切换选区形状（或快捷键 `Tab` / `R` / `E`），按住 `Shift` 拖拽自动锁定 **1:1 正圆 / 正方形**。 |
+| **透明背景 PNG 导出** | 圆形与椭圆截图导出时外部区域保留 **100% 真实 Alpha 透明**，保存 PNG 或复制剪贴板时完美无白边、无黑角。 |
+| **核心贴图 (Pin to Desktop)**| 截选任意图像一键脱离置顶贴图（快捷键 `Ctrl+P`），支持滚轮无级缩放（0.2x~5.0x）、`Ctrl+滚轮` 调节透明度、透明贴图自适应去除边框。 |
+| **双引擎高精度离线 OCR** | 集成 **PaddleOCR PP-OCRv4 (RapidOCR ONNX)** + **Tesseract LSTM** 双引擎。精准过滤背景干扰，智能识别艺术字、视频封面与场景文字。 |
+| **全功能标注涂鸦** | 矩形框、圆形框、导向箭头、自由画笔、数字序号气球 (1, 2, 3...)、局部马赛克/模糊、富文本输入、动态调色板与撤销重做。 |
+| **双屏 / 异构多显示器** | 完整支持多屏幕拼接几何布局与混合 DPI 缩放，屏幕间平滑移动无缝接壤。 |
 
 ---
 
-## 🚀 启动与全局快捷键配置
+## 📦 下载与安装
 
-### 命令行唤起
+已提供主流 Linux 发行版的预编译安装包（位于 [Releases 页面](https://github.com/realsky/pixpin-linux/releases) 或本地 `releases/` 目录）：
+
+### 1. Ubuntu / Debian / Linux Mint / Deepin / UOS (`.deb`)
+
 ```bash
-# 启动常驻系统托盘
-pixpin
+# 下载并安装 deb 软件包
+sudo dpkg -i pixpin_1.0.0_amd64.deb
 
-# 立即开始截屏（推荐绑定到全局快捷键）
-pixpin -c
-# 或
-pixpin --capture
-
-# 贴出当前剪贴板中的图片
-pixpin -p
-# 或
-pixpin --pin
+# 如果缺少基础依赖，执行自动修复
+sudo apt-get install -f -y
 ```
 
-### Ubuntu GNOME 绑定全局快捷键（如 `Ctrl + 1` 或 `Ctrl + Alt + A`）
-1. 打开系统设置：**设置 (Settings)** -> **键盘 (Keyboard)** -> **键盘快捷键 (Keyboard Shortcuts)** -> **查看及自定义快捷键 (View and Customize Shortcuts)**。
-2. 滑到最底部，点击 **自定义快捷键 (Custom Shortcuts)** -> **+** 号添加：
+### 2. 通用免编译便携版 (Universal Linux x86_64 `.tar.gz`)
+
+适用于任何 Linux 发行版（Fedora、Arch、openSUSE、CentOS 等）：
+
+```bash
+tar -xzvf pixpin-1.0.0-linux-x86_64.tar.gz
+cd pixpin-1.0.0-linux-x86_64
+
+# 免 root 安装到 ~/.local (推荐)：
+./install.sh
+
+# 或系统级安装到 /usr/local：
+sudo ./install.sh
+```
+
+如需卸载，运行 `./uninstall.sh` 即可彻底清除。
+
+### 3. Arch Linux / Manjaro
+
+可直接使用项目内置的 PKGBUILD 快速打包安装：
+
+```bash
+cd packaging/arch
+makepkg -si
+```
+
+---
+
+## ⚡ 启用高精度 PaddleOCR (RapidOCR)
+
+PixPin 默认自带系统级 Tesseract OCR 引擎。若需识别复杂场景文字、视频封面标题或极高准确率的汉字识别，可一键安装 RapidOCR 支持库：
+
+```bash
+# 运行内置的一键配置脚本 (免 sudo，自动创建独立隔离环境)：
+./scripts/setup-ocr.sh
+```
+
+该脚本将会在 `~/.local/share/pixpin/venv` 中自动安装 ONNX 运行环境与 PaddleOCR PP-OCRv4 轻量级离线模型，PixPin 启动时将自动无缝接管 OCR 识别。
+
+---
+
+## ⌨️ 快捷键与操作指南
+
+### 截屏与交互
+
+| 快捷键 / 操作 | 动作功能 |
+| :--- | :--- |
+| `Alt + 1` / `Ctrl + 1` | 唤起截屏（系统自定义全局快捷键绑定 `pixpin -c`） |
+| `鼠标左键拖拽` | 框选截屏区域 |
+| `Shift + 拖拽` | **等比例锁定**：椭圆模式锁定为**正圆**，矩形模式锁定为**正方形** |
+| `Tab` | 切换选区形状（矩形 ↔ 椭圆/圆形） |
+| `R` | 直接切换为矩形截屏模式 |
+| `E` | 直接切换为椭圆/圆形截屏模式 |
+| `Ctrl + P` | 将当前截图**钉在桌面上（贴图）** |
+| `Ctrl + C` / 双击选区 | 复制当前截图到剪贴板并退出 |
+| `Ctrl + S` | 保存截图为文件（支持透明 PNG、JPG、BMP） |
+| `Ctrl + T` | 提取当前选区文字（OCR 识别） |
+| `Ctrl + Z` | 撤销上一步涂鸦/标注操作 |
+| `Esc` / 鼠标右键 | 取消并退出截屏 |
+
+### 桌面贴图操作 (Pin Window)
+
+| 操作 | 功能说明 |
+| :--- | :--- |
+| `鼠标左键拖拽` | 移动贴图窗口位置 |
+| `鼠标滚轮` | 缩放贴图大小 (0.2x ~ 5.0x 无级缩放) |
+| `Ctrl + 鼠标滚轮` | 调节贴图透明度 (20% ~ 100%) |
+| `鼠标双击` | 关闭贴图 |
+| `鼠标右键` | 打开上下文菜单：复制、另存为、文字识别提取、水平/垂直镜像翻转、置顶锁定 |
+
+---
+
+## ⚙️ 系统全局快捷键绑定 (Ubuntu GNOME)
+
+在 Ubuntu GNOME 桌面环境下，推荐将全局截图快捷键绑定到 `pixpin -c`：
+
+1. 打开系统 **设置 (Settings)** -> **键盘 (Keyboard)** -> **键盘快捷键 (Keyboard Shortcuts)** -> **查看及自定义快捷键 (View and Customize Shortcuts)**。
+2. 滑动到最底部，点击 **自定义快捷键 (Custom Shortcuts)** -> 点击 **+** 号：
    - **名称**：`PixPin 截屏`
    - **命令**：`pixpin -c`
-   - **快捷键**：按下 `Ctrl + 1` 或 `Ctrl + Alt + A`
-3. 再添加一个贴图快捷键（可选）：
+   - **快捷键**：按下您习惯的组合键（例如 `Alt + 1` 或 `Ctrl + Alt + A`）
+3. 绑定贴图快捷键（可选）：
    - **名称**：`PixPin 贴图`
    - **命令**：`pixpin -p`
-   - **快捷键**：按下 `Ctrl + 2`
+   - **快捷键**：按下 `Alt + 2` 或 `Ctrl + Alt + P`
+
+---
+
+## 🛠️ 从源码构建
+
+如果您希望自行从源码编译 PixPin Linux：
+
+### 1. 安装构建依赖
+
+```bash
+# Ubuntu / Debian
+sudo apt update
+sudo apt install -y build-essential cmake ninja-build \
+    qt6-base-dev libqt6svg6-dev \
+    libtesseract-dev libleptonica-dev \
+    tesseract-ocr-chi-sim tesseract-ocr-eng
+
+# Fedora
+sudo dnf install -y gcc-c++ cmake ninja-build \
+    qt6-qtbase-devel qt6-qtsvg-devel \
+    tesseract-devel leptonica-devel
+
+# Arch Linux
+sudo pacman -S --needed base-devel cmake ninja \
+    qt6-base qt6-svg tesseract leptonica
+```
+
+### 2. 编译与打包
+
+```bash
+git clone https://github.com/realsky/pixpin-linux.git
+cd pixpin-linux
+
+# 一键编译并打包 Release 版本
+./scripts/build-release.sh
+```
+
+编译生成的可执行文件位于 `build/pixpin`，安装包位于 `releases/`。
+
+---
+
+## 📁 目录结构
+
+```
+pixpin-linux/
+├── CMakeLists.txt              # CMake 构建与 CPack 打包配置
+├── LICENSE                     # MIT 开源许可证
+├── README.md                   # 详细使用与开发说明
+├── INSTALL.md                  # 各 Linux 发行版安装指引
+├── pixpin.desktop              # XDG 标准桌面快捷入口
+├── pixpin.svg                  # 高清矢量应用图标
+├── packaging/                  # 针对各发行版的打包元数据
+│   ├── arch/PKGBUILD           # Arch Linux 打包配方
+│   ├── debian/                 # Debian/Ubuntu postinst/postrm 脚本
+│   ├── portable/               # 通用便携安装/卸载脚本 (install.sh / uninstall.sh)
+│   └── rpm/pixpin.spec         # Fedora/RPM 打包规范
+├── releases/                   # 预编译二进制发行文件
+│   ├── pixpin_1.0.0_amd64.deb
+│   ├── pixpin-1.0.0-linux-x86_64.tar.gz
+│   └── SHA256SUMS.txt
+├── scripts/                    # 实用运维与打包脚本
+│   ├── build-release.sh        # 一键 Release 构建脚本
+│   └── setup-ocr.sh            # RapidOCR 离线环境一键配置脚本
+└── src/                        # 核心 C++ 源代码
+    ├── app/                    # 应用程序核心与系统托盘管理
+    ├── capture/                # 4K 高分屏截屏遮罩、放大镜、跨屏捕获
+    ├── ui/                     # 工具栏、全能涂鸦标注层、置顶贴图窗
+    ├── ocr/                    # OCR 引擎管理与暗黑风格提取弹窗
+    └── utils/                  # 图像算法、几何计算与透明蒙版处理
+```
+
+---
+
+## 📄 开源许可证
+
+本项目基于 [MIT 许可证](LICENSE) 开源。欢迎提交 Issue 与 Pull Request！

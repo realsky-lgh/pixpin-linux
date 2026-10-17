@@ -1,0 +1,27 @@
+# Maintainer: realsky <realsky@local>
+pkgname=pixpin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Smart Screenshot, Pin and Offline OCR tool for Linux (PixPin Port)"
+arch=('x86_64')
+url="https://github.com/realsky/pixpin-linux"
+license=('MIT')
+depends=('qt6-base' 'qt6-svg' 'tesseract' 'leptonica')
+optdepends=(
+    'python: RapidOCR advanced scene text recognition'
+    'python-pip: Install rapidocr_onnxruntime'
+)
+makedepends=('cmake' 'ninja' 'gcc')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cmake -B build -S "$pkgname-$pkgver" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build -j$(nproc)
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

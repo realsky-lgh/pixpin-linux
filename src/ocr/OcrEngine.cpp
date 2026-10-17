@@ -29,12 +29,50 @@ OcrEngine::~OcrEngine() {
     }
 }
 
-void OcrEngine::startRapidOcrWorker() {
-    QString pyPath = QDir::homePath() + "/.local/share/pixpin/venv/bin/python";
-    QString scriptPath = QDir::homePath() + "/.local/share/pixpin/ocr_worker.py";
+#include <QCoreApplication>
+#include <QStandardPaths>
 
-    if (!QFileInfo::exists(pyPath) || !QFileInfo::exists(scriptPath)) {
-        qWarning() << "RapidOCR virtualenv or worker script not found at" << scriptPath;
+void OcrEngine::startRapidOcrWorker() {
+    QStringList scriptCandidates = {
+        QDir::homePath() + "/.local/share/pixpin/ocr_worker.py",
+        QCoreApplication::applicationDirPath() + "/../share/pixpin/ocr_worker.py",
+        "/usr/share/pixpin/ocr_worker.py",
+        "/usr/local/share/pixpin/ocr_worker.py",
+        QCoreApplication::applicationDirPath() + "/ocr_worker.py",
+        QCoreApplication::applicationDirPath() + "/../src/ocr/ocr_worker.py"
+    };
+
+    QString scriptPath;
+    for (const QString &path : scriptCandidates) {
+        if (QFileInfo::exists(path)) {
+            scriptPath = path;
+            break;
+        }
+    }
+
+    if (scriptPath.isEmpty()) {
+        qWarning() << "RapidOCR worker script not found in any standard paths.";
+        m_rapidOcrAvailable = false;
+        return;
+    }
+
+    QStringList pyCandidates = {
+        QDir::homePath() + "/.local/share/pixpin/venv/bin/python",
+        QDir::homePath() + "/.local/share/pixpin/venv/bin/python3",
+        QStandardPaths::findExecutable("python3"),
+        "/usr/bin/python3"
+    };
+
+    QString pyPath;
+    for (const QString &path : pyCandidates) {
+        if (!path.isEmpty() && QFileInfo::exists(path)) {
+            pyPath = path;
+            break;
+        }
+    }
+
+    if (pyPath.isEmpty()) {
+        qWarning() << "Python executable not found for RapidOCR.";
         m_rapidOcrAvailable = false;
         return;
     }
@@ -55,7 +93,7 @@ void OcrEngine::startRapidOcrWorker() {
         QByteArray line = m_rapidOcrProc->readLine().trimmed();
         if (line == "READY") {
             m_rapidOcrAvailable = true;
-            qDebug() << "RapidOCR (PaddleOCR/ONNX) worker initialized successfully!";
+            qDebug() << "RapidOCR (PaddleOCR/ONNX) worker initialized successfully from" << scriptPath << "using" << pyPath;
         }
     }
 }

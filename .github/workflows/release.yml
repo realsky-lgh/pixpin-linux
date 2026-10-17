@@ -1,0 +1,75 @@
+name: Build and Release PixPin Linux
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            qt6-base-dev \
+            libqt6svg6-dev \
+            libtesseract-dev \
+            libleptonica-dev \
+            tesseract-ocr-chi-sim \
+            tesseract-ocr-eng
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: |
+          cmake --build build --config Release
+
+      - name: Strip binary
+        run: |
+          strip build/pixpin
+
+      - name: Package with CPack (DEB and TGZ)
+        working-directory: build
+        run: |
+          cpack -G "DEB;TGZ"
+
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p dist
+          mv build/*.deb dist/pixpin_${GITHUB_REF_NAME}_amd64.deb 2>/dev/null || mv build/*.deb dist/pixpin_1.0.0_amd64.deb
+          mv build/*.tar.gz dist/pixpin-1.0.0-linux-x86_64.tar.gz
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixpin-linux-binaries
+          path: dist/*
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
