@@ -6,7 +6,6 @@
 #include <QRect>
 #include <QPoint>
 #include <QScreen>
-#include "MagnifierWidget.h"
 #include "../ui/ToolBarWidget.h"
 #include "../ui/AnnotationLayer.h"
 
@@ -59,6 +58,7 @@ private:
     void updateCursorForHandle(ResizeHandle handle);
     QRect getHandleRect(const QPoint &center) const;
     QPixmap getComposedPixmap(bool highRes = false) const;
+    void drawMagnifier(QPainter &p, const QPoint &cursorPos);
 
     void onCopy();
     void onSave();
@@ -67,6 +67,8 @@ private:
 
     QScreen *m_screen = nullptr;
     QPixmap m_rawPixmap;       // High-resolution physical monitor slice
+    QPixmap m_scaledPixmap;    // Screen logical size pixmap for instant 1:1 blit
+    QPixmap m_dimmedPixmap;    // Pre-dimmed background for zero-overhead repainting
     QImage m_rawImage;
     double m_scaleX = 1.0;
     double m_scaleY = 1.0;
@@ -77,8 +79,8 @@ private:
 
     QPoint m_startPos;
     QPoint m_lastMousePos;
+    QPoint m_currentCursorPos;
 
-    MagnifierWidget *m_magnifier = nullptr;
     ToolBarWidget *m_toolbar = nullptr;
     AnnotationLayer *m_annotations = nullptr;
 
