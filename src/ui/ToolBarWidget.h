@@ -60,4 +60,7 @@ private:
     QPushButton *m_btnCopy = nullptr;
     QPushButton *m_btnSave = nullptr;
     QPushButton *m_btnClose = nullptr;
+
+    QRect m_lastTargetRect;
+    QRect m_lastBoundaryRect;
 };

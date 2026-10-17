@@ -13,27 +13,30 @@ ToolBarWidget::ToolBarWidget(QWidget *parent)
 
 void ToolBarWidget::setupUI() {
     m_rootLayout = new QVBoxLayout(this);
-    m_rootLayout->setContentsMargins(8, 8, 8, 8);
-    m_rootLayout->setSpacing(4);
+    m_rootLayout->setContentsMargins(0, 0, 0, 0);
+    m_rootLayout->setSpacing(3);
 
     m_mainBar = new QWidget(this);
     m_mainBar->setObjectName("mainBar");
+    m_mainBar->setFixedHeight(36);
     m_mainBar->setStyleSheet(
         "#mainBar {"
         "   background-color: rgba(30, 30, 34, 0.95);"
         "   border: 1px solid rgba(255, 255, 255, 0.15);"
-        "   border-radius: 8px;"
+        "   border-radius: 6px;"
         "}"
         "QPushButton {"
         "   background: transparent;"
         "   color: #ECECEC;"
-        "   font-size: 14px;"
+        "   font-size: 13px;"
         "   font-weight: bold;"
         "   border: none;"
-        "   border-radius: 5px;"
-        "   min-width: 32px;"
-        "   min-height: 32px;"
-        "   padding: 4px;"
+        "   border-radius: 4px;"
+        "   min-width: 28px;"
+        "   min-height: 28px;"
+        "   max-width: 32px;"
+        "   max-height: 32px;"
+        "   padding: 2px;"
         "}"
         "QPushButton:hover {"
         "   background-color: rgba(255, 255, 255, 0.15);"
@@ -45,8 +48,8 @@ void ToolBarWidget::setupUI() {
     );
 
     auto *mainLayout = new QHBoxLayout(m_mainBar);
-    mainLayout->setContentsMargins(6, 4, 6, 4);
-    mainLayout->setSpacing(3);
+    mainLayout->setContentsMargins(4, 2, 4, 2);
+    mainLayout->setSpacing(2);
 
     m_toolGroup = new QButtonGroup(this);
     m_toolGroup->setExclusive(false);
@@ -136,6 +139,10 @@ void ToolBarWidget::setupUI() {
             m_subBar->hide();
             emit toolSelected(ToolType::None);
         }
+        adjustSize();
+        if (m_lastTargetRect.isValid() && m_lastBoundaryRect.isValid()) {
+            updatePosition(m_lastTargetRect, m_lastBoundaryRect);
+        }
     };
 
     connect(m_btnRect, &QPushButton::toggled, [=](bool) { handleToolChecked(m_btnRect, ToolType::Rect); });
@@ -152,17 +159,18 @@ void ToolBarWidget::setupUI() {
 void ToolBarWidget::setupSubBar() {
     m_subBar = new QWidget(this);
     m_subBar->setObjectName("subBar");
+    m_subBar->setFixedHeight(28);
     m_subBar->setStyleSheet(
         "#subBar {"
-        "   background-color: rgba(36, 36, 40, 0.95);"
+        "   background-color: rgba(30, 30, 34, 0.95);"
         "   border: 1px solid rgba(255, 255, 255, 0.15);"
         "   border-radius: 6px;"
         "}"
     );
 
     auto *subLayout = new QHBoxLayout(m_subBar);
-    subLayout->setContentsMargins(8, 4, 8, 4);
-    subLayout->setSpacing(6);
+    subLayout->setContentsMargins(6, 2, 6, 2);
+    subLayout->setSpacing(5);
 
     // Color Swatches
     QList<QColor> colors = {
@@ -176,10 +184,10 @@ void ToolBarWidget::setupSubBar() {
 
     for (const auto &color : colors) {
         auto *btn = new QPushButton(m_subBar);
-        btn->setFixedSize(20, 20);
+        btn->setFixedSize(16, 16);
         btn->setCursor(Qt::PointingHandCursor);
         QString border = (color == QColor(255, 255, 255)) ? "border: 1px solid #999;" : "border: 1px solid rgba(255,255,255,0.4);";
-        btn->setStyleSheet(QString("background-color: %1; border-radius: 10px; %2").arg(color.name()).arg(border));
+        btn->setStyleSheet(QString("background-color: %1; border-radius: 8px; %2").arg(color.name()).arg(border));
         connect(btn, &QPushButton::clicked, [this, color]() {
             emit colorChanged(color);
         });
@@ -195,13 +203,13 @@ void ToolBarWidget::setupSubBar() {
     QList<QPair<QString, int>> widths = {{"细", 2}, {"中", 4}, {"粗", 6}};
     for (const auto &pair : widths) {
         auto *btn = new QPushButton(pair.first, m_subBar);
-        btn->setFixedSize(30, 22);
+        btn->setFixedSize(26, 20);
         btn->setStyleSheet(
             "QPushButton {"
             "   background: rgba(255,255,255,0.1);"
             "   color: white;"
             "   font-size: 11px;"
-            "   border-radius: 4px;"
+            "   border-radius: 3px;"
             "   border: none;"
             "}"
             "QPushButton:hover { background: rgba(255,255,255,0.25); }"
@@ -212,7 +220,7 @@ void ToolBarWidget::setupSubBar() {
         subLayout->addWidget(btn);
     }
 
-    m_rootLayout->addWidget(m_subBar);
+    m_rootLayout->addWidget(m_subBar, 0, Qt::AlignRight);
     m_subBar->hide(); // Hidden by default
 }
 
@@ -229,33 +237,58 @@ void ToolBarWidget::resetTools() {
         b->setChecked(false);
     }
     m_subBar->hide();
+    adjustSize();
+    if (m_lastTargetRect.isValid() && m_lastBoundaryRect.isValid()) {
+        updatePosition(m_lastTargetRect, m_lastBoundaryRect);
+    }
     emit toolSelected(ToolType::None);
 }
 
 void ToolBarWidget::updatePosition(const QRect &targetRect, const QRect &boundaryRect) {
+    if (targetRect.isValid()) {
+        m_lastTargetRect = targetRect;
+    }
+    if (boundaryRect.isValid()) {
+        m_lastBoundaryRect = boundaryRect;
+    }
+
     adjustSize();
     int w = width();
     int h = height();
 
     // Align to the right bottom of the selection
     int x = targetRect.right() - w;
-    int y = targetRect.bottom() + 10;
+    int y = targetRect.bottom() + 6;
 
-    // Check bottom boundary
+    // Check bottom boundary: if it extends past the bottom of the screen, place above
     if (y + h > boundaryRect.bottom()) {
-        y = targetRect.top() - h - 10;
+        y = targetRect.top() - h - 6;
     }
-    // Check top boundary
+
+    // Check top boundary: if placing above extends past the top of the screen
     if (y < boundaryRect.top()) {
-        y = targetRect.bottom() - h - 10;
+        // If neither above nor below fits outside, place inside selection at bottom
+        if (targetRect.bottom() - h - 6 >= boundaryRect.top()) {
+            y = targetRect.bottom() - h - 6;
+        } else {
+            y = boundaryRect.bottom() - h - 4;
+        }
     }
-    // Check left boundary
-    if (x < boundaryRect.left()) {
-        x = boundaryRect.left() + 10;
+
+    // Hard boundary clamps to ensure complete visibility
+    if (y + h > boundaryRect.bottom()) {
+        y = boundaryRect.bottom() - h - 4;
     }
-    // Check right boundary
+    if (y < boundaryRect.top()) {
+        y = boundaryRect.top() + 4;
+    }
+
+    // Check horizontal boundaries
     if (x + w > boundaryRect.right()) {
-        x = boundaryRect.right() - w - 10;
+        x = boundaryRect.right() - w - 6;
+    }
+    if (x < boundaryRect.left()) {
+        x = boundaryRect.left() + 6;
     }
 
     move(x, y);
