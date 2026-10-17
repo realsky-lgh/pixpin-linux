@@ -8,7 +8,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets DBus Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets DBus Svg Network)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TESS REQUIRED tesseract lept)
 
@@ -54,6 +54,7 @@ target_link_libraries(pixpin_linux PRIVATE
     Qt6::Widgets
     Qt6::DBus
     Qt6::Svg
+    Qt6::Network
     ${TESS_LIBRARIES}
 )
 

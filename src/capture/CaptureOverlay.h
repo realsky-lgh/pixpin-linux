@@ -5,6 +5,7 @@
 #include <QImage>
 #include <QRect>
 #include <QPoint>
+#include <QScreen>
 #include "MagnifierWidget.h"
 #include "../ui/ToolBarWidget.h"
 #include "../ui/AnnotationLayer.h"
@@ -33,12 +34,16 @@ enum class ResizeHandle {
 class CaptureOverlay : public QWidget {
     Q_OBJECT
 public:
-    explicit CaptureOverlay(const QPixmap &screenPixmap, QWidget *parent = nullptr);
+    explicit CaptureOverlay(QScreen *screen, const QPixmap &screenRawPixmap, QWidget *parent = nullptr);
+
+    QScreen *targetScreen() const { return m_screen; }
+    void clearSelection();
 
 signals:
     void pinRequested(const QPixmap &pixmap);
     void ocrRequested(const QPixmap &pixmap);
-    void closed();
+    void selectionStarted(CaptureOverlay *sender);
+    void overlayClosed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -60,8 +65,9 @@ private:
     void onPin();
     void onOcr();
 
-    QPixmap m_rawPixmap;       // High-resolution physical screenshot (e.g. 6240x2160)
-    QPixmap m_displayPixmap;   // Scaled to logical coordinates (e.g. 4992x1728)
+    QScreen *m_screen = nullptr;
+    QPixmap m_rawPixmap;       // High-resolution physical monitor slice
+    QPixmap m_displayPixmap;   // Scaled to match monitor logical size
     QImage m_displayImage;
     QRect m_selectedRect;
     CaptureState m_state = CaptureState::Idle;

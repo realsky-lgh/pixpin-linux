@@ -8,24 +8,26 @@
 #include <QDateTime>
 #include <QStandardPaths>
 #include <QInputDialog>
-#include <QScreen>
+#include <QWindow>
 
-CaptureOverlay::CaptureOverlay(const QPixmap &screenPixmap, QWidget *parent)
+CaptureOverlay::CaptureOverlay(QScreen *screen, const QPixmap &screenRawPixmap, QWidget *parent)
     : QWidget(parent, Qt::BypassWindowManagerHint | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint | Qt::Tool)
-    , m_rawPixmap(screenPixmap) {
+    , m_screen(screen)
+    , m_rawPixmap(screenRawPixmap) {
     setAttribute(Qt::WA_DeleteOnClose);
     setMouseTracking(true);
 
-    // Cover all virtual desktop screens
-    QRect totalGeo;
-    for (QScreen *s : QGuiApplication::screens()) {
-        totalGeo = totalGeo.united(s->geometry());
+    winId();
+    if (windowHandle() && m_screen) {
+        windowHandle()->setScreen(m_screen);
     }
-    setGeometry(totalGeo);
-
-    // Scale physical image to fit logical screen coordinates exactly
-    if (m_rawPixmap.size() != totalGeo.size()) {
-        m_displayPixmap = m_rawPixmap.scaled(totalGeo.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    if (m_screen) {
+        setGeometry(m_screen->geometry());
+        if (m_rawPixmap.size() != m_screen->size()) {
+            m_displayPixmap = m_rawPixmap.scaled(m_screen->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        } else {
+            m_displayPixmap = m_rawPixmap;
+        }
     } else {
         m_displayPixmap = m_rawPixmap;
     }
@@ -72,7 +74,19 @@ void CaptureOverlay::setupUI() {
     connect(m_toolbar, &ToolBarWidget::saveTriggered, this, &CaptureOverlay::onSave);
     connect(m_toolbar, &ToolBarWidget::pinTriggered, this, &CaptureOverlay::onPin);
     connect(m_toolbar, &ToolBarWidget::ocrTriggered, this, &CaptureOverlay::onOcr);
-    connect(m_toolbar, &ToolBarWidget::closeTriggered, this, &QWidget::close);
+    connect(m_toolbar, &ToolBarWidget::closeTriggered, [this]() {
+        emit overlayClosed();
+    });
+}
+
+void CaptureOverlay::clearSelection() {
+    if (m_state != CaptureState::Idle) {
+        m_state = CaptureState::Idle;
+        m_selectedRect = QRect();
+        m_toolbar->hide();
+        m_magnifier->show();
+        update();
+    }
 }
 
 ResizeHandle CaptureOverlay::hitTest(const QPoint &pos) const {
@@ -229,11 +243,12 @@ void CaptureOverlay::mousePressEvent(QMouseEvent *event) {
             return;
         }
 
-        // Click outside selection restarts selection
+        // Click outside restarts selection
         m_state = CaptureState::Selecting;
         m_selectedRect = QRect(event->pos(), QSize(0, 0));
         m_toolbar->hide();
         m_magnifier->show();
+        emit selectionStarted(this);
         update();
         return;
     }
@@ -241,6 +256,7 @@ void CaptureOverlay::mousePressEvent(QMouseEvent *event) {
     if (m_state == CaptureState::Idle) {
         m_state = CaptureState::Selecting;
         m_selectedRect = QRect(event->pos(), QSize(0, 0));
+        emit selectionStarted(this);
         update();
     }
 }
@@ -335,7 +351,7 @@ void CaptureOverlay::mouseDoubleClickEvent(QMouseEvent *event) {
 
 void CaptureOverlay::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Escape) {
-        close();
+        emit overlayClosed();
     } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         onCopy();
     } else if (event->key() == Qt::Key_C && (event->modifiers() & Qt::ControlModifier)) {
@@ -367,7 +383,7 @@ QPixmap CaptureOverlay::getComposedPixmap(bool highRes) const {
         return result;
     }
 
-    // Precise physical coordinate mapping
+    // Precise physical coordinate mapping within THIS screen's raw slice
     double scaleX = (double)m_rawPixmap.width() / width();
     double scaleY = (double)m_rawPixmap.height() / height();
     QRect rawRect(
@@ -397,7 +413,7 @@ void CaptureOverlay::onCopy() {
     if (!result.isNull()) {
         QApplication::clipboard()->setPixmap(result);
     }
-    close();
+    emit overlayClosed();
 }
 
 void CaptureOverlay::onSave() {
@@ -412,7 +428,7 @@ void CaptureOverlay::onSave() {
     if (!filePath.isEmpty()) {
         result.save(filePath);
     }
-    close();
+    emit overlayClosed();
 }
 
 void CaptureOverlay::onPin() {
@@ -420,7 +436,7 @@ void CaptureOverlay::onPin() {
     if (!result.isNull()) {
         emit pinRequested(result);
     }
-    close();
+    emit overlayClosed();
 }
 
 void CaptureOverlay::onOcr() {
@@ -429,5 +445,5 @@ void CaptureOverlay::onOcr() {
     if (!result.isNull()) {
         emit ocrRequested(result);
     }
-    close();
+    emit overlayClosed();
 }

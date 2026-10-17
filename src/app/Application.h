@@ -14,11 +14,12 @@ class Application : public QObject {
     Q_OBJECT
 public:
     explicit Application(QObject *parent = nullptr);
-    ~Application() override = default;
+    ~Application() override;
 
     void start();
     void triggerCapture();
     void pinFromClipboard();
+    void closeAllOverlays();
 
 private slots:
     void onScreenCaptured(const QPixmap &pixmap);
@@ -30,6 +31,6 @@ private:
     std::unique_ptr<ScreenCapturer> m_capturer;
     std::unique_ptr<OcrEngine> m_ocrEngine;
     SystemTray *m_tray = nullptr;
-    CaptureOverlay *m_activeOverlay = nullptr;
+    QList<CaptureOverlay *> m_activeOverlays;
     QList<PinWindow *> m_pinWindows;
 };

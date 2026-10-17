@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QMessageBox>
+#include <QScreen>
 #include <QDebug>
 
 Application::Application(QObject *parent)
@@ -11,6 +12,10 @@ Application::Application(QObject *parent)
 
     connect(m_capturer.get(), &ScreenCapturer::screenCaptured, this, &Application::onScreenCaptured);
     connect(m_capturer.get(), &ScreenCapturer::captureFailed, this, &Application::onCaptureFailed);
+}
+
+Application::~Application() {
+    closeAllOverlays();
 }
 
 void Application::start() {
@@ -23,11 +28,16 @@ void Application::start() {
 }
 
 void Application::triggerCapture() {
-    if (m_activeOverlay) {
-        m_activeOverlay->close();
-        m_activeOverlay = nullptr;
-    }
+    closeAllOverlays();
     m_capturer->capture();
+}
+
+void Application::closeAllOverlays() {
+    for (auto *o : m_activeOverlays) {
+        disconnect(o, nullptr, nullptr, nullptr);
+        o->close();
+    }
+    m_activeOverlays.clear();
 }
 
 void Application::pinFromClipboard() {
@@ -46,19 +56,60 @@ void Application::onScreenCaptured(const QPixmap &pixmap) {
         return;
     }
 
-    m_activeOverlay = new CaptureOverlay(pixmap);
-    connect(m_activeOverlay, &CaptureOverlay::pinRequested, this, &Application::onPinRequested);
-    connect(m_activeOverlay, &CaptureOverlay::ocrRequested, this, &Application::onOcrRequested);
-    connect(m_activeOverlay, &CaptureOverlay::destroyed, [this]() {
-        m_activeOverlay = nullptr;
-    });
+    closeAllOverlays();
 
-    m_activeOverlay->showFullScreen();
+    QList<QScreen *> screens = QGuiApplication::screens();
+    if (screens.isEmpty()) {
+        onCaptureFailed("未检测到有效显示器");
+        return;
+    }
+
+    QRect totalGeometry;
+    for (QScreen *s : screens) {
+        totalGeometry = totalGeometry.united(s->geometry());
+    }
+
+    double ratioX = (double)pixmap.width() / totalGeometry.width();
+    double ratioY = (double)pixmap.height() / totalGeometry.height();
+
+    for (QScreen *s : screens) {
+        QRect screenGeo = s->geometry();
+        QRect rawRect(
+            qRound((screenGeo.x() - totalGeometry.x()) * ratioX),
+            qRound((screenGeo.y() - totalGeometry.y()) * ratioY),
+            qRound(screenGeo.width() * ratioX),
+            qRound(screenGeo.height() * ratioY)
+        );
+        rawRect = rawRect.intersected(pixmap.rect());
+        QPixmap screenRawPixmap = pixmap.copy(rawRect);
+
+        auto *overlay = new CaptureOverlay(s, screenRawPixmap);
+        m_activeOverlays.append(overlay);
+
+        connect(overlay, &CaptureOverlay::pinRequested, this, &Application::onPinRequested);
+        connect(overlay, &CaptureOverlay::ocrRequested, this, &Application::onOcrRequested);
+
+        // When user starts selecting on one monitor, clear selection on other monitors
+        connect(overlay, &CaptureOverlay::selectionStarted, this, [this](CaptureOverlay *active) {
+            for (auto *o : m_activeOverlays) {
+                if (o != active) {
+                    o->clearSelection();
+                }
+            }
+        });
+
+        // When any overlay finishes/closes, close all overlays
+        connect(overlay, &CaptureOverlay::overlayClosed, this, &Application::closeAllOverlays);
+
+        overlay->showFullScreen();
+    }
 }
 
 void Application::onCaptureFailed(const QString &reason) {
     qWarning() << "Capture failed:" << reason;
-    m_tray->showMessage("PixPin 截图失败", reason, QSystemTrayIcon::Warning, 3000);
+    if (m_tray) {
+        m_tray->showMessage("PixPin 截图失败", reason, QSystemTrayIcon::Warning, 3000);
+    }
 }
 
 void Application::onPinRequested(const QPixmap &pixmap) {
