@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
     // Check if an instance is already running
     QLocalSocket socket;
     socket.connectToServer(serverName);
-    if (socket.waitForConnected(300)) {
+    if (socket.waitForConnected(50)) {
         // An instance is already running in background! Send command and exit immediately.
         QString command = "capture";
         if (parser.isSet(pinOption)) {

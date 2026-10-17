@@ -2,8 +2,7 @@
 #include "../utils/ImageUtils.h"
 #include <QPainter>
 #include <QPainterPath>
-#include <QScreen>
-#include <QGuiApplication>
+#include <algorithm>
 
 MagnifierWidget::MagnifierWidget(QWidget *parent)
     : QWidget(parent) {
@@ -13,28 +12,28 @@ MagnifierWidget::MagnifierWidget(QWidget *parent)
     setFixedSize(160, 200);
 }
 
-void MagnifierWidget::updatePositionAndData(const QPoint &cursorPos, const QImage &screenImage) {
+void MagnifierWidget::updatePositionAndData(const QPoint &cursorPos, const QImage &rawImage, double scaleX, double scaleY) {
     m_cursorPos = cursorPos;
 
-    if (!screenImage.isNull()) {
-        m_pixelColor = ImageUtils::getPixelColor(screenImage, cursorPos.x(), cursorPos.y());
+    if (!rawImage.isNull()) {
+        int rawX = std::clamp(qRound(cursorPos.x() * scaleX), 0, rawImage.width() - 1);
+        int rawY = std::clamp(qRound(cursorPos.y() * scaleY), 0, rawImage.height() - 1);
 
-        // Crop sample region around cursor
+        m_pixelColor = rawImage.pixelColor(rawX, rawY);
+
+        // Crop sample region directly without extra painter overhead
         int sampleSize = m_sampleRadius * 2 + 1;
-        int sx = cursorPos.x() - m_sampleRadius;
-        int sy = cursorPos.y() - m_sampleRadius;
+        int sx = rawX - m_sampleRadius;
+        int sy = rawY - m_sampleRadius;
 
-        QImage sample(sampleSize, sampleSize, QImage::Format_ARGB32_Premultiplied);
-        sample.fill(Qt::black);
-
-        QPainter sp(&sample);
-        sp.drawImage(0, 0, screenImage, sx, sy, sampleSize, sampleSize);
-        sp.end();
-
-        m_zoomedImage = sample.scaled(140, 110, Qt::KeepAspectRatio, Qt::FastTransformation);
+        QRect cropRect = QRect(sx, sy, sampleSize, sampleSize).intersected(rawImage.rect());
+        if (!cropRect.isEmpty()) {
+            QImage sample = rawImage.copy(cropRect);
+            m_zoomedImage = sample.scaled(140, 110, Qt::KeepAspectRatio, Qt::FastTransformation);
+        }
     }
 
-    // Position the magnifier slightly offset from the cursor
+    // Position the magnifier offset from cursor
     int offsetX = 20;
     int offsetY = 20;
     int targetX = cursorPos.x() + offsetX;

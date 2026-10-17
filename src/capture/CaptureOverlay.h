@@ -67,8 +67,10 @@ private:
 
     QScreen *m_screen = nullptr;
     QPixmap m_rawPixmap;       // High-resolution physical monitor slice
-    QPixmap m_displayPixmap;   // Scaled to match monitor logical size
-    QImage m_displayImage;
+    QImage m_rawImage;
+    double m_scaleX = 1.0;
+    double m_scaleY = 1.0;
+
     QRect m_selectedRect;
     CaptureState m_state = CaptureState::Idle;
     ResizeHandle m_activeHandle = ResizeHandle::None;

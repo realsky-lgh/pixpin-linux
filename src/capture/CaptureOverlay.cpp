@@ -23,15 +23,10 @@ CaptureOverlay::CaptureOverlay(QScreen *screen, const QPixmap &screenRawPixmap, 
     }
     if (m_screen) {
         setGeometry(m_screen->geometry());
-        if (m_rawPixmap.size() != m_screen->size()) {
-            m_displayPixmap = m_rawPixmap.scaled(m_screen->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        } else {
-            m_displayPixmap = m_rawPixmap;
-        }
-    } else {
-        m_displayPixmap = m_rawPixmap;
+        m_scaleX = (double)m_rawPixmap.width() / m_screen->geometry().width();
+        m_scaleY = (double)m_rawPixmap.height() / m_screen->geometry().height();
     }
-    m_displayImage = m_displayPixmap.toImage();
+    m_rawImage = m_rawPixmap.toImage();
 
     setupUI();
 }
@@ -144,27 +139,26 @@ void CaptureOverlay::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    // Draw display pixmap scaled to logical geometry
-    p.drawPixmap(0, 0, m_displayPixmap);
+    // Fast GPU-interpolated draw of raw pixmap to logical rect
+    p.drawPixmap(rect(), m_rawPixmap);
 
-    // Dim non-selected areas
-    QRegion maskRegion(rect());
-    if (m_selectedRect.isValid() && !m_selectedRect.isEmpty()) {
-        maskRegion = maskRegion.subtracted(QRegion(m_selectedRect.normalized()));
-    }
-
-    p.setClipRegion(maskRegion);
-    p.fillRect(rect(), QColor(0, 0, 0, 110));
-    p.setClipping(false);
-
-    // If selection exists, draw border and annotations
+    // Ultra-fast 4-rect dimming without polygon clipping overhead
+    QColor dimColor(0, 0, 0, 115);
     if (m_selectedRect.isValid() && !m_selectedRect.isEmpty()) {
         QRect r = m_selectedRect.normalized();
+        if (r.top() > 0)
+            p.fillRect(0, 0, width(), r.top(), dimColor);
+        if (r.bottom() < height() - 1)
+            p.fillRect(0, r.bottom() + 1, width(), height() - (r.bottom() + 1), dimColor);
+        if (r.left() > 0)
+            p.fillRect(0, r.top(), r.left(), r.height(), dimColor);
+        if (r.right() < width() - 1)
+            p.fillRect(r.right() + 1, r.top(), width() - (r.right() + 1), r.height(), dimColor);
 
         // Render annotations inside selection
         p.save();
         p.setClipRect(r);
-        m_annotations->render(p, m_displayImage);
+        m_annotations->render(p, m_rawImage);
         p.restore();
 
         // Selection Border
@@ -208,6 +202,8 @@ void CaptureOverlay::paintEvent(QPaintEvent *) {
         p.fillRect(badgeRect, QColor(20, 20, 20, 210));
         p.setPen(Qt::white);
         p.drawText(badgeRect, Qt::AlignCenter, dimText);
+    } else {
+        p.fillRect(rect(), dimColor);
     }
 }
 
@@ -265,7 +261,7 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event) {
     QPoint pos = event->pos();
 
     if (m_magnifier && m_magnifier->isVisible()) {
-        m_magnifier->updatePositionAndData(pos, m_displayImage);
+        m_magnifier->updatePositionAndData(pos, m_rawImage, m_scaleX, m_scaleY);
     }
 
     if (m_state == CaptureState::Annotating) {
@@ -372,37 +368,36 @@ QPixmap CaptureOverlay::getComposedPixmap(bool highRes) const {
     QRect r = m_selectedRect.normalized();
     if (!r.isValid() || r.isEmpty()) return QPixmap();
 
-    if (!highRes || m_rawPixmap.size() == size()) {
-        QPixmap result(r.size());
+    // Map logical rect r to raw physical coordinates
+    QRect rawRect(
+        qRound(r.x() * m_scaleX),
+        qRound(r.y() * m_scaleY),
+        qRound(r.width() * m_scaleX),
+        qRound(r.height() * m_scaleY)
+    );
+    rawRect = rawRect.intersected(m_rawPixmap.rect());
+
+    QPixmap rawCrop = m_rawPixmap.copy(rawRect);
+
+    if (!highRes) {
+        // Normal resolution for Pinning
+        QPixmap result = rawCrop.scaled(r.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         QPainter p(&result);
         p.setRenderHint(QPainter::Antialiasing);
-        p.drawPixmap(0, 0, m_displayPixmap.copy(r));
         p.translate(-r.topLeft());
-        const_cast<AnnotationLayer *>(m_annotations)->render(p, m_displayImage);
+        const_cast<AnnotationLayer *>(m_annotations)->render(p, m_rawImage);
         p.end();
         return result;
     }
 
-    // Precise physical coordinate mapping within THIS screen's raw slice
-    double scaleX = (double)m_rawPixmap.width() / width();
-    double scaleY = (double)m_rawPixmap.height() / height();
-    QRect rawRect(
-        qRound(r.x() * scaleX),
-        qRound(r.y() * scaleY),
-        qRound(r.width() * scaleX),
-        qRound(r.height() * scaleY)
-    );
-    rawRect = rawRect.intersected(m_rawPixmap.rect());
-
-    QPixmap result(rawRect.size());
+    // High resolution for OCR and saving
+    QPixmap result(rawCrop.size());
     QPainter p(&result);
     p.setRenderHint(QPainter::Antialiasing);
-    p.drawPixmap(0, 0, m_rawPixmap.copy(rawRect));
-
-    // Render annotations at physical scale
-    p.scale(scaleX, scaleY);
+    p.drawPixmap(0, 0, rawCrop);
+    p.scale(m_scaleX, m_scaleY);
     p.translate(-r.topLeft());
-    const_cast<AnnotationLayer *>(m_annotations)->render(p, m_displayImage);
+    const_cast<AnnotationLayer *>(m_annotations)->render(p, m_rawImage);
     p.end();
 
     return result;
@@ -440,7 +435,7 @@ void CaptureOverlay::onPin() {
 }
 
 void CaptureOverlay::onOcr() {
-    // Send high-resolution cropped image for maximum OCR accuracy
+    // Send 100% native resolution image for maximum OCR accuracy
     QPixmap result = getComposedPixmap(true);
     if (!result.isNull()) {
         emit ocrRequested(result);
