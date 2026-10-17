@@ -13,10 +13,11 @@
 #include <algorithm>
 
 PinWindow::PinWindow(const QPixmap &pixmap, QWidget *parent)
-    : QWidget(parent, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool)
+    : QWidget(parent, Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint | Qt::Dialog)
     , m_originalPixmap(pixmap) {
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_DeleteOnClose);
+    setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setCursor(Qt::SizeAllCursor);
 
