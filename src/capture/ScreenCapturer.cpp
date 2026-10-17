@@ -10,6 +10,8 @@
 #include <QFile>
 #include <QDebug>
 #include <QTimer>
+#include <QUuid>
+#include <QWidget>
 
 ScreenCapturer::ScreenCapturer(QObject *parent)
     : QObject(parent) {}
@@ -71,49 +73,63 @@ void ScreenCapturer::captureWayland() {
         return;
     }
 
-    QVariantMap options;
-    options["interactive"] = false;
-
-    QDBusMessage reply = portal.call("Screenshot", "", options);
-    if (reply.type() == QDBusMessage::ErrorMessage) {
-        qWarning() << "Portal Screenshot call failed:" << reply.errorMessage() << ", trying X11 fallback";
-        captureX11();
-        return;
-    }
-
-    if (reply.arguments().isEmpty()) {
-        emit captureFailed("Portal 返回空响应");
-        return;
-    }
-
-    QDBusObjectPath reqPath = reply.arguments().at(0).value<QDBusObjectPath>();
-    m_requestPath = reqPath.path();
-
+    // Connect to Response signal BEFORE calling Screenshot to prevent any race condition
     QDBusConnection::sessionBus().connect(
         "org.freedesktop.portal.Desktop",
-        m_requestPath,
+        QString(), // Match any request path
         "org.freedesktop.portal.Request",
         "Response",
         this,
         SLOT(onPortalResponse(uint, QVariantMap))
     );
-}
 
-void ScreenCapturer::onPortalResponse(uint response, const QVariantMap &results) {
-    if (!m_requestPath.isEmpty()) {
+    QString token = QUuid::createUuid().toString().remove('{').remove('}').remove('-');
+
+    QVariantMap options;
+    options["handle_token"] = token;
+    options["interactive"] = false;
+
+    // Build a non-empty parent_window handle. xdg-desktop-portal-gnome
+    // (>= 46) rejects an empty string with "Failed to associate portal
+    // window with parent window ''" when launched from custom global shortcuts.
+    // On Wayland we pass "wayland:" prefix so it proceeds without requiring a focused window.
+    QString parentWindow = "wayland:";
+
+    QDBusMessage reply = portal.call("Screenshot", parentWindow, options);
+    if (reply.type() == QDBusMessage::ErrorMessage) {
+        qWarning() << "Portal Screenshot call failed:" << reply.errorMessage() << ", trying X11 fallback";
         QDBusConnection::sessionBus().disconnect(
             "org.freedesktop.portal.Desktop",
-            m_requestPath,
+            QString(),
             "org.freedesktop.portal.Request",
             "Response",
             this,
             SLOT(onPortalResponse(uint, QVariantMap))
         );
-        m_requestPath.clear();
+        captureX11();
+        return;
     }
 
+    if (!reply.arguments().isEmpty()) {
+        QDBusObjectPath reqPath = reply.arguments().at(0).value<QDBusObjectPath>();
+        m_requestPath = reqPath.path();
+    }
+}
+
+void ScreenCapturer::onPortalResponse(uint response, const QVariantMap &results) {
+    // Disconnect listener once response is received
+    QDBusConnection::sessionBus().disconnect(
+        "org.freedesktop.portal.Desktop",
+        QString(),
+        "org.freedesktop.portal.Request",
+        "Response",
+        this,
+        SLOT(onPortalResponse(uint, QVariantMap))
+    );
+    m_requestPath.clear();
+
     if (response != 0) {
-        emit captureFailed("用户取消或系统拒绝截图请求");
+        emit captureFailed("用户取消或系统拒绝截图请求 (Response Code: " + QString::number(response) + ")");
         return;
     }
 

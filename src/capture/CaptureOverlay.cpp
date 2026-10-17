@@ -12,17 +12,24 @@
 
 CaptureOverlay::CaptureOverlay(const QPixmap &screenPixmap, QWidget *parent)
     : QWidget(parent, Qt::BypassWindowManagerHint | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint | Qt::Tool)
-    , m_screenPixmap(screenPixmap)
-    , m_screenImage(screenPixmap.toImage()) {
+    , m_rawPixmap(screenPixmap) {
     setAttribute(Qt::WA_DeleteOnClose);
     setMouseTracking(true);
 
-    // Cover all screens
+    // Cover all virtual desktop screens
     QRect totalGeo;
     for (QScreen *s : QGuiApplication::screens()) {
         totalGeo = totalGeo.united(s->geometry());
     }
     setGeometry(totalGeo);
+
+    // Scale physical image to fit logical screen coordinates exactly
+    if (m_rawPixmap.size() != totalGeo.size()) {
+        m_displayPixmap = m_rawPixmap.scaled(totalGeo.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    } else {
+        m_displayPixmap = m_rawPixmap;
+    }
+    m_displayImage = m_displayPixmap.toImage();
 
     setupUI();
 }
@@ -71,7 +78,6 @@ void CaptureOverlay::setupUI() {
 ResizeHandle CaptureOverlay::hitTest(const QPoint &pos) const {
     if (m_selectedRect.isNull() || !m_selectedRect.isValid()) return ResizeHandle::None;
 
-    int hs = m_handleSize;
     QRect r = m_selectedRect.normalized();
 
     if (getHandleRect(r.topLeft()).contains(pos)) return ResizeHandle::TopLeft;
@@ -124,8 +130,8 @@ void CaptureOverlay::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    // Draw background screen
-    p.drawPixmap(0, 0, m_screenPixmap);
+    // Draw display pixmap scaled to logical geometry
+    p.drawPixmap(0, 0, m_displayPixmap);
 
     // Dim non-selected areas
     QRegion maskRegion(rect());
@@ -144,7 +150,7 @@ void CaptureOverlay::paintEvent(QPaintEvent *) {
         // Render annotations inside selection
         p.save();
         p.setClipRect(r);
-        m_annotations->render(p, m_screenImage);
+        m_annotations->render(p, m_displayImage);
         p.restore();
 
         // Selection Border
@@ -243,7 +249,7 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event) {
     QPoint pos = event->pos();
 
     if (m_magnifier && m_magnifier->isVisible()) {
-        m_magnifier->updatePositionAndData(pos, m_screenImage);
+        m_magnifier->updatePositionAndData(pos, m_displayImage);
     }
 
     if (m_state == CaptureState::Annotating) {
@@ -346,27 +352,48 @@ void CaptureOverlay::keyPressEvent(QKeyEvent *event) {
     }
 }
 
-QPixmap CaptureOverlay::getComposedPixmap() const {
+QPixmap CaptureOverlay::getComposedPixmap(bool highRes) const {
     QRect r = m_selectedRect.normalized();
     if (!r.isValid() || r.isEmpty()) return QPixmap();
 
-    QPixmap result(r.size());
+    if (!highRes || m_rawPixmap.size() == size()) {
+        QPixmap result(r.size());
+        QPainter p(&result);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.drawPixmap(0, 0, m_displayPixmap.copy(r));
+        p.translate(-r.topLeft());
+        const_cast<AnnotationLayer *>(m_annotations)->render(p, m_displayImage);
+        p.end();
+        return result;
+    }
+
+    // Precise physical coordinate mapping
+    double scaleX = (double)m_rawPixmap.width() / width();
+    double scaleY = (double)m_rawPixmap.height() / height();
+    QRect rawRect(
+        qRound(r.x() * scaleX),
+        qRound(r.y() * scaleY),
+        qRound(r.width() * scaleX),
+        qRound(r.height() * scaleY)
+    );
+    rawRect = rawRect.intersected(m_rawPixmap.rect());
+
+    QPixmap result(rawRect.size());
     QPainter p(&result);
     p.setRenderHint(QPainter::Antialiasing);
+    p.drawPixmap(0, 0, m_rawPixmap.copy(rawRect));
 
-    // Base cropped image
-    p.drawPixmap(0, 0, m_screenPixmap.copy(r));
-
-    // Render annotations translated to local coordinates
+    // Render annotations at physical scale
+    p.scale(scaleX, scaleY);
     p.translate(-r.topLeft());
-    const_cast<AnnotationLayer *>(m_annotations)->render(p, m_screenImage);
+    const_cast<AnnotationLayer *>(m_annotations)->render(p, m_displayImage);
     p.end();
 
     return result;
 }
 
 void CaptureOverlay::onCopy() {
-    QPixmap result = getComposedPixmap();
+    QPixmap result = getComposedPixmap(true);
     if (!result.isNull()) {
         QApplication::clipboard()->setPixmap(result);
     }
@@ -374,7 +401,7 @@ void CaptureOverlay::onCopy() {
 }
 
 void CaptureOverlay::onSave() {
-    QPixmap result = getComposedPixmap();
+    QPixmap result = getComposedPixmap(true);
     if (result.isNull()) return;
 
     m_toolbar->hide();
@@ -389,7 +416,7 @@ void CaptureOverlay::onSave() {
 }
 
 void CaptureOverlay::onPin() {
-    QPixmap result = getComposedPixmap();
+    QPixmap result = getComposedPixmap(false);
     if (!result.isNull()) {
         emit pinRequested(result);
     }
@@ -397,7 +424,8 @@ void CaptureOverlay::onPin() {
 }
 
 void CaptureOverlay::onOcr() {
-    QPixmap result = getComposedPixmap();
+    // Send high-resolution cropped image for maximum OCR accuracy
+    QPixmap result = getComposedPixmap(true);
     if (!result.isNull()) {
         emit ocrRequested(result);
     }

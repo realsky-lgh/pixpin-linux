@@ -53,15 +53,16 @@ private:
     ResizeHandle hitTest(const QPoint &pos) const;
     void updateCursorForHandle(ResizeHandle handle);
     QRect getHandleRect(const QPoint &center) const;
-    QPixmap getComposedPixmap() const;
+    QPixmap getComposedPixmap(bool highRes = false) const;
 
     void onCopy();
     void onSave();
     void onPin();
     void onOcr();
 
-    QPixmap m_screenPixmap;
-    QImage m_screenImage;
+    QPixmap m_rawPixmap;       // High-resolution physical screenshot (e.g. 6240x2160)
+    QPixmap m_displayPixmap;   // Scaled to logical coordinates (e.g. 4992x1728)
+    QImage m_displayImage;
     QRect m_selectedRect;
     CaptureState m_state = CaptureState::Idle;
     ResizeHandle m_activeHandle = ResizeHandle::None;
