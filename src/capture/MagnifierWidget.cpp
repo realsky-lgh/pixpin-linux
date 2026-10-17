@@ -13,6 +13,9 @@ MagnifierWidget::MagnifierWidget(QWidget *parent)
 }
 
 void MagnifierWidget::updatePositionAndData(const QPoint &cursorPos, const QImage &rawImage, double scaleX, double scaleY) {
+    if (m_cursorPos == cursorPos) {
+        return;
+    }
     m_cursorPos = cursorPos;
 
     if (!rawImage.isNull()) {

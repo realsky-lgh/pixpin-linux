@@ -47,12 +47,13 @@ CaptureOverlay::CaptureOverlay(QScreen *screen, const QPixmap &screenRawPixmap, 
     dimPainter.fillRect(m_dimmedPixmap.rect(), QColor(0, 0, 0, 115));
     dimPainter.end();
 
-    m_currentCursorPos = mapFromGlobal(QCursor::pos());
-
     setupUI();
 }
 
 void CaptureOverlay::setupUI() {
+    m_magnifier = new MagnifierWidget(this);
+    m_magnifier->show();
+
     m_toolbar = new ToolBarWidget(this);
     m_toolbar->hide();
 
@@ -97,6 +98,7 @@ void CaptureOverlay::clearSelection() {
         m_state = CaptureState::Idle;
         m_selectedRect = QRect();
         m_toolbar->hide();
+        m_magnifier->show();
         update();
     }
 }
@@ -212,103 +214,7 @@ void CaptureOverlay::paintEvent(QPaintEvent *) {
         p.fillRect(badgeRect, QColor(20, 20, 20, 210));
         p.setPen(Qt::white);
         p.drawText(badgeRect, Qt::AlignCenter, dimText);
-    } else if (m_state == CaptureState::Idle) {
-        drawMagnifier(p, m_currentCursorPos);
     }
-}
-
-void CaptureOverlay::drawMagnifier(QPainter &p, const QPoint &cursorPos) {
-    if (cursorPos.x() < 0 || cursorPos.y() < 0 || cursorPos.x() >= width() || cursorPos.y() >= height()) {
-        return;
-    }
-
-    int rawX = std::clamp(qRound(cursorPos.x() * m_scaleX), 0, m_rawImage.width() - 1);
-    int rawY = std::clamp(qRound(cursorPos.y() * m_scaleY), 0, m_rawImage.height() - 1);
-    QColor pixelColor = m_rawImage.pixelColor(rawX, rawY);
-
-    int sampleRadius = 15;
-    int sampleSize = sampleRadius * 2 + 1;
-    int sx = rawX - sampleRadius;
-    int sy = rawY - sampleRadius;
-
-    QRect cropRect = QRect(sx, sy, sampleSize, sampleSize).intersected(m_rawImage.rect());
-    QImage zoomedImage;
-    if (!cropRect.isEmpty()) {
-        QImage sample = m_rawImage.copy(cropRect);
-        zoomedImage = sample.scaled(140, 110, Qt::KeepAspectRatio, Qt::FastTransformation);
-    }
-
-    int cardW = 160;
-    int cardH = 200;
-    int offsetX = 20;
-    int offsetY = 20;
-    int targetX = cursorPos.x() + offsetX;
-    int targetY = cursorPos.y() + offsetY;
-
-    if (targetX + cardW > width()) {
-        targetX = cursorPos.x() - cardW - offsetX;
-    }
-    if (targetY + cardH > height()) {
-        targetY = cursorPos.y() - cardH - offsetY;
-    }
-
-    p.save();
-    p.setRenderHint(QPainter::Antialiasing, true);
-    p.translate(targetX, targetY);
-
-    // Rounded card background
-    QRectF cardRect(0, 0, cardW, cardH);
-    QPainterPath path;
-    path.addRoundedRect(cardRect, 10, 10);
-    p.fillPath(path, QColor(25, 25, 28, 230));
-    p.setPen(QPen(QColor(80, 80, 85, 200), 1.5));
-    p.drawPath(path);
-
-    // Draw Zoomed Screen Area
-    QRect zoomRect(10, 10, 140, 110);
-    p.setClipRect(zoomRect);
-    if (!zoomedImage.isNull()) {
-        p.drawImage(zoomRect, zoomedImage);
-    }
-
-    // Crosshair in center
-    p.setPen(QPen(QColor(0, 255, 255, 200), 1.5));
-    int centerX = zoomRect.center().x();
-    int centerY = zoomRect.center().y();
-    p.drawLine(centerX - 8, centerY, centerX + 8, centerY);
-    p.drawLine(centerX, centerY - 8, centerX, centerY + 8);
-
-    p.setClipping(false);
-    p.setPen(QPen(QColor(120, 120, 130), 1));
-    p.drawRect(zoomRect);
-
-    // Information area
-    QFont font("Sans", 9);
-    p.setFont(font);
-
-    // Coordinate
-    p.setPen(QColor(220, 220, 220));
-    QString posStr = QString("坐标: (%1, %2)").arg(cursorPos.x()).arg(cursorPos.y());
-    p.drawText(10, 140, posStr);
-
-    // Color Swatch
-    QRect swatchRect(10, 150, 16, 16);
-    p.fillRect(swatchRect, pixelColor);
-    p.setPen(Qt::white);
-    p.drawRect(swatchRect);
-
-    // HEX & RGB
-    p.setPen(QColor(255, 255, 255));
-    QString hexStr = ImageUtils::colorToHex(pixelColor);
-    QString rgbStr = QString("RGB: %1,%2,%3").arg(pixelColor.red()).arg(pixelColor.green()).arg(pixelColor.blue());
-    p.drawText(32, 163, hexStr);
-
-    p.setPen(QColor(180, 180, 180));
-    QFont smallFont("Sans", 8);
-    p.setFont(smallFont);
-    p.drawText(10, 185, rgbStr);
-
-    p.restore();
 }
 
 void CaptureOverlay::mousePressEvent(QMouseEvent *event) {
@@ -347,6 +253,7 @@ void CaptureOverlay::mousePressEvent(QMouseEvent *event) {
         m_state = CaptureState::Selecting;
         m_selectedRect = QRect(event->pos(), QSize(0, 0));
         m_toolbar->hide();
+        m_magnifier->hide();
         emit selectionStarted(this);
         update();
         return;
@@ -355,6 +262,7 @@ void CaptureOverlay::mousePressEvent(QMouseEvent *event) {
     if (m_state == CaptureState::Idle) {
         m_state = CaptureState::Selecting;
         m_selectedRect = QRect(event->pos(), QSize(0, 0));
+        m_magnifier->hide();
         emit selectionStarted(this);
         update();
     }
@@ -362,10 +270,13 @@ void CaptureOverlay::mousePressEvent(QMouseEvent *event) {
 
 void CaptureOverlay::mouseMoveEvent(QMouseEvent *event) {
     QPoint pos = event->pos();
-    m_currentCursorPos = pos;
 
+    // In Idle mode, update only the 160x200 magnifier widget.
+    // NEVER call update() on the full 4K screen here to ensure 100% smooth mouse movement!
     if (m_state == CaptureState::Idle) {
-        update();
+        if (m_magnifier) {
+            m_magnifier->updatePositionAndData(pos, m_rawImage, m_scaleX, m_scaleY);
+        }
         return;
     }
 
@@ -430,6 +341,7 @@ void CaptureOverlay::mouseReleaseEvent(QMouseEvent *event) {
         // Filter out accidental clicks
         if (m_selectedRect.width() > 10 && m_selectedRect.height() > 10) {
             m_state = CaptureState::Selected;
+            m_magnifier->hide();
             m_toolbar->updatePosition(m_selectedRect, rect());
             m_toolbar->show();
             setCursor(Qt::ArrowCursor);
@@ -437,8 +349,21 @@ void CaptureOverlay::mouseReleaseEvent(QMouseEvent *event) {
             m_state = CaptureState::Idle;
             m_selectedRect = QRect();
             m_toolbar->hide();
+            m_magnifier->show();
         }
         update();
+    }
+}
+
+void CaptureOverlay::enterEvent(QEnterEvent *) {
+    if (m_state == CaptureState::Idle && m_magnifier) {
+        m_magnifier->show();
+    }
+}
+
+void CaptureOverlay::leaveEvent(QEvent *) {
+    if (m_state == CaptureState::Idle && m_magnifier) {
+        m_magnifier->hide();
     }
 }
 

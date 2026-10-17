@@ -6,6 +6,8 @@
 #include <QRect>
 #include <QPoint>
 #include <QScreen>
+#include <QEnterEvent>
+#include "MagnifierWidget.h"
 #include "../ui/ToolBarWidget.h"
 #include "../ui/AnnotationLayer.h"
 
@@ -51,6 +53,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
 
 private:
     void setupUI();
@@ -58,7 +62,6 @@ private:
     void updateCursorForHandle(ResizeHandle handle);
     QRect getHandleRect(const QPoint &center) const;
     QPixmap getComposedPixmap(bool highRes = false) const;
-    void drawMagnifier(QPainter &p, const QPoint &cursorPos);
 
     void onCopy();
     void onSave();
@@ -79,8 +82,8 @@ private:
 
     QPoint m_startPos;
     QPoint m_lastMousePos;
-    QPoint m_currentCursorPos;
 
+    MagnifierWidget *m_magnifier = nullptr;
     ToolBarWidget *m_toolbar = nullptr;
     AnnotationLayer *m_annotations = nullptr;
 
