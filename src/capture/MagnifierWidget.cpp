@@ -9,7 +9,14 @@ MagnifierWidget::MagnifierWidget(QWidget *parent)
     setWindowFlags(Qt::SubWindow | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setAttribute(Qt::WA_TranslucentBackground);
-    setFixedSize(160, 200);
+    setFixedSize(160, 215);
+}
+
+void MagnifierWidget::setSelectionShape(SelectionShape shape) {
+    if (m_selectionShape != shape) {
+        m_selectionShape = shape;
+        update();
+    }
 }
 
 void MagnifierWidget::updatePositionAndData(const QPoint &cursorPos, const QImage &rawImage, double scaleX, double scaleY) {
@@ -109,4 +116,9 @@ void MagnifierWidget::paintEvent(QPaintEvent *) {
     QFont smallFont("Sans", 8);
     p.setFont(smallFont);
     p.drawText(10, 185, rgbStr);
+
+    // Shape mode indicator
+    p.setPen(QColor(0, 180, 255));
+    QString shapeStr = (m_selectionShape == SelectionShape::Rectangle) ? "选区: 矩形 (Tab切换)" : "选区: 椭圆/圆 (Tab切换)";
+    p.drawText(10, 203, shapeStr);
 }

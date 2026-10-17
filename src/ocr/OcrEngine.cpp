@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QStringList>
 #include <QDebug>
+#include <QPainter>
 #include <algorithm>
 
 OcrEngine::OcrEngine(QObject *parent)
@@ -229,16 +230,26 @@ QString OcrEngine::recognizeWithTesseract(const QImage &image) {
 QString OcrEngine::recognizeText(const QImage &image) {
     if (image.isNull()) return QString();
 
+    QImage processed = image;
+    if (processed.hasAlphaChannel()) {
+        QImage whiteBg(processed.size(), QImage::Format_RGB888);
+        whiteBg.fill(Qt::white);
+        QPainter p(&whiteBg);
+        p.drawImage(0, 0, processed);
+        p.end();
+        processed = whiteBg;
+    }
+
     // Prefer RapidOCR (PaddleOCR/ONNX) for state-of-the-art scene/graphics text detection
     if (m_rapidOcrAvailable) {
-        QString text = recognizeWithRapidOcr(image);
+        QString text = recognizeWithRapidOcr(processed);
         if (!text.isEmpty()) {
             return text;
         }
     }
 
     // Fallback to Tesseract
-    return recognizeWithTesseract(image);
+    return recognizeWithTesseract(processed);
 }
 
 QString OcrEngine::recognizeText(const QPixmap &pixmap) {

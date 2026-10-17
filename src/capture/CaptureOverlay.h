@@ -40,6 +40,10 @@ public:
     QScreen *targetScreen() const { return m_screen; }
     void clearSelection();
 
+    SelectionShape selectionShape() const { return m_selectionShape; }
+    void setSelectionShape(SelectionShape shape);
+    void toggleSelectionShape();
+
 signals:
     void pinRequested(const QPixmap &pixmap);
     void ocrRequested(const QPixmap &pixmap);
@@ -77,6 +81,7 @@ private:
     double m_scaleY = 1.0;
 
     QRect m_selectedRect;
+    SelectionShape m_selectionShape = SelectionShape::Rectangle;
     CaptureState m_state = CaptureState::Idle;
     ResizeHandle m_activeHandle = ResizeHandle::None;
 

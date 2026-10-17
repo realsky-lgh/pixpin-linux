@@ -51,6 +51,14 @@ void ToolBarWidget::setupUI() {
     m_toolGroup = new QButtonGroup(this);
     m_toolGroup->setExclusive(false);
 
+    // Shape toggle button: Rectangle vs Ellipse/Circle
+    m_btnShape = createToolButton("⭕", "切换形状: 椭圆/圆 (快捷键: Tab)");
+    connect(m_btnShape, &QPushButton::clicked, [this]() {
+        m_currentShape = (m_currentShape == SelectionShape::Rectangle) ? SelectionShape::Ellipse : SelectionShape::Rectangle;
+        updateShapeButton();
+        emit selectionShapeChanged(m_currentShape);
+    });
+
     // Primary Action Tools
     m_btnPin = createToolButton("📌", "贴图 (Ctrl+P / 钉在屏幕上)");
     m_btnOcr = createToolButton("🔤", "提取文字 (离线快速 OCR)");
@@ -87,6 +95,7 @@ void ToolBarWidget::setupUI() {
     m_btnClose = createToolButton("✕", "关闭截图 (Esc)");
 
     // Assemble main layout
+    mainLayout->addWidget(m_btnShape);
     mainLayout->addWidget(m_btnPin);
     mainLayout->addWidget(m_btnOcr);
     mainLayout->addWidget(sep1);
@@ -250,4 +259,22 @@ void ToolBarWidget::updatePosition(const QRect &targetRect, const QRect &boundar
     }
 
     move(x, y);
+}
+
+void ToolBarWidget::setSelectionShape(SelectionShape shape) {
+    if (m_currentShape != shape) {
+        m_currentShape = shape;
+        updateShapeButton();
+    }
+}
+
+void ToolBarWidget::updateShapeButton() {
+    if (!m_btnShape) return;
+    if (m_currentShape == SelectionShape::Rectangle) {
+        m_btnShape->setText("⭕");
+        m_btnShape->setToolTip("切换形状: 椭圆/圆 (快捷键: Tab)");
+    } else {
+        m_btnShape->setText("🔲");
+        m_btnShape->setToolTip("切换形状: 矩形 (快捷键: Tab)");
+    }
 }

@@ -7,6 +7,11 @@
 #include <QVBoxLayout>
 #include "AnnotationLayer.h"
 
+enum class SelectionShape {
+    Rectangle,
+    Ellipse
+};
+
 class ToolBarWidget : public QWidget {
     Q_OBJECT
 public:
@@ -14,9 +19,12 @@ public:
 
     void resetTools();
     void updatePosition(const QRect &targetRect, const QRect &boundaryRect);
+    void setSelectionShape(SelectionShape shape);
+    SelectionShape selectionShape() const { return m_currentShape; }
 
 signals:
     void toolSelected(ToolType tool);
+    void selectionShapeChanged(SelectionShape shape);
     void colorChanged(const QColor &color);
     void strokeWidthChanged(int width);
     void undoTriggered();
@@ -29,13 +37,16 @@ signals:
 private:
     void setupUI();
     void setupSubBar();
+    void updateShapeButton();
     QPushButton *createToolButton(const QString &text, const QString &tooltip, bool checkable = false);
 
+    SelectionShape m_currentShape = SelectionShape::Rectangle;
     QWidget *m_mainBar = nullptr;
     QWidget *m_subBar = nullptr;
     QVBoxLayout *m_rootLayout = nullptr;
     QButtonGroup *m_toolGroup = nullptr;
 
+    QPushButton *m_btnShape = nullptr;
     QPushButton *m_btnPin = nullptr;
     QPushButton *m_btnOcr = nullptr;
     QPushButton *m_btnRect = nullptr;

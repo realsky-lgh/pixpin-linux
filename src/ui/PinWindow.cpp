@@ -30,16 +30,19 @@ void PinWindow::setScale(qreal factor) {
 
 void PinWindow::paintEvent(QPaintEvent *) {
     QPainter painter(this);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.setOpacity(m_opacity);
 
     // Draw scaled pixmap
     painter.drawPixmap(rect(), m_originalPixmap);
 
-    // Draw subtle border around pinned window
-    painter.setOpacity(0.4);
-    painter.setPen(QPen(Qt::white, 1));
-    painter.drawRect(0, 0, width() - 1, height() - 1);
+    // Draw subtle border around pinned window only for rectangular/opaque images
+    if (!m_originalPixmap.hasAlphaChannel() || m_originalPixmap.toImage().pixelColor(0, 0).alpha() > 10) {
+        painter.setOpacity(0.4);
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawRect(0, 0, width() - 1, height() - 1);
+    }
 }
 
 void PinWindow::mousePressEvent(QMouseEvent *event) {

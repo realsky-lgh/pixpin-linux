@@ -84,6 +84,7 @@ void CaptureOverlay::setupUI() {
         update();
     });
 
+    connect(m_toolbar, &ToolBarWidget::selectionShapeChanged, this, &CaptureOverlay::setSelectionShape);
     connect(m_toolbar, &ToolBarWidget::copyTriggered, this, &CaptureOverlay::onCopy);
     connect(m_toolbar, &ToolBarWidget::saveTriggered, this, &CaptureOverlay::onSave);
     connect(m_toolbar, &ToolBarWidget::pinTriggered, this, &CaptureOverlay::onPin);
@@ -91,6 +92,25 @@ void CaptureOverlay::setupUI() {
     connect(m_toolbar, &ToolBarWidget::closeTriggered, [this]() {
         emit overlayClosed();
     });
+}
+
+void CaptureOverlay::setSelectionShape(SelectionShape shape) {
+    if (m_selectionShape != shape) {
+        m_selectionShape = shape;
+        if (m_magnifier) {
+            m_magnifier->setSelectionShape(shape);
+        }
+        if (m_toolbar) {
+            m_toolbar->setSelectionShape(shape);
+        }
+        if (m_selectedRect.isValid() && !m_selectedRect.isEmpty()) {
+            update(m_selectedRect.adjusted(-15, -40, 15, 15).intersected(rect()));
+        }
+    }
+}
+
+void CaptureOverlay::toggleSelectionShape() {
+    setSelectionShape(m_selectionShape == SelectionShape::Rectangle ? SelectionShape::Ellipse : SelectionShape::Rectangle);
 }
 
 void CaptureOverlay::clearSelection() {
@@ -168,13 +188,29 @@ void CaptureOverlay::paintEvent(QPaintEvent *event) {
         QRect r = m_selectedRect.normalized();
         QRect punch = r.intersected(clip);
         if (!punch.isEmpty()) {
-            p.drawPixmap(punch, m_scaledPixmap, punch);
+            if (m_selectionShape == SelectionShape::Rectangle) {
+                p.drawPixmap(punch, m_scaledPixmap, punch);
+            } else {
+                p.save();
+                p.setRenderHint(QPainter::Antialiasing, true);
+                QPainterPath ellipsePath;
+                ellipsePath.addEllipse(r);
+                p.setClipPath(ellipsePath);
+                p.drawPixmap(punch, m_scaledPixmap, punch);
+                p.restore();
+            }
         }
 
         // Render annotations inside selection
         p.save();
-        p.setClipRect(r);
         p.setRenderHint(QPainter::Antialiasing, true);
+        if (m_selectionShape == SelectionShape::Rectangle) {
+            p.setClipRect(r);
+        } else {
+            QPainterPath ellipsePath;
+            ellipsePath.addEllipse(r);
+            p.setClipPath(ellipsePath);
+        }
         m_annotations->render(p, m_rawImage);
         p.restore();
 
@@ -182,7 +218,11 @@ void CaptureOverlay::paintEvent(QPaintEvent *event) {
         p.setRenderHint(QPainter::Antialiasing, true);
         p.setPen(QPen(QColor(0, 122, 255), 2));
         p.setBrush(Qt::NoBrush);
-        p.drawRect(r);
+        if (m_selectionShape == SelectionShape::Rectangle) {
+            p.drawRect(r);
+        } else {
+            p.drawEllipse(r);
+        }
 
         // Control Points (Handles)
         if (m_state == CaptureState::Selected || m_state == CaptureState::Resizing) {
@@ -208,7 +248,15 @@ void CaptureOverlay::paintEvent(QPaintEvent *event) {
         // Dimension badge with cached static font metrics
         static const QFont badgeFont("Sans", 9, QFont::Bold);
         static const QFontMetrics badgeFm(badgeFont);
-        QString dimText = QString("%1 × %2").arg(r.width()).arg(r.height());
+        QString dimText;
+        if (m_selectionShape == SelectionShape::Rectangle) {
+            dimText = QString("%1 × %2").arg(r.width()).arg(r.height());
+        } else if (r.width() == r.height()) {
+            dimText = QString("圆 ⌀ %1").arg(r.width());
+        } else {
+            dimText = QString("椭圆 %1 × %2").arg(r.width()).arg(r.height());
+        }
+
         p.setFont(badgeFont);
         int textW = badgeFm.horizontalAdvance(dimText) + 12;
         int textH = badgeFm.height() + 6;
@@ -296,7 +344,17 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event) {
 
     if (m_state == CaptureState::Selecting) {
         QRect oldRect = m_selectedRect;
-        m_selectedRect = QRect(m_startPos, pos).normalized();
+        QPoint curPos = pos;
+        if (event->modifiers() & Qt::ShiftModifier) {
+            // Constrain to 1:1 aspect ratio (Square or Circle)
+            int dx = curPos.x() - m_startPos.x();
+            int dy = curPos.y() - m_startPos.y();
+            int side = qMax(qAbs(dx), qAbs(dy));
+            int signX = (dx >= 0) ? 1 : -1;
+            int signY = (dy >= 0) ? 1 : -1;
+            curPos = QPoint(m_startPos.x() + signX * side, m_startPos.y() + signY * side);
+        }
+        m_selectedRect = QRect(m_startPos, curPos).normalized();
         QRect dirty = oldRect.united(m_selectedRect).adjusted(-15, -40, 15, 15).intersected(rect());
         update(dirty);
         return;
@@ -394,6 +452,12 @@ void CaptureOverlay::mouseDoubleClickEvent(QMouseEvent *event) {
 void CaptureOverlay::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Escape) {
         emit overlayClosed();
+    } else if (event->key() == Qt::Key_Tab) {
+        toggleSelectionShape();
+    } else if (event->key() == Qt::Key_R && !(event->modifiers() & Qt::ControlModifier)) {
+        setSelectionShape(SelectionShape::Rectangle);
+    } else if (event->key() == Qt::Key_E && !(event->modifiers() & Qt::ControlModifier)) {
+        setSelectionShape(SelectionShape::Ellipse);
     } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         onCopy();
     } else if (event->key() == Qt::Key_C && (event->modifiers() & Qt::ControlModifier)) {
@@ -426,27 +490,49 @@ QPixmap CaptureOverlay::getComposedPixmap(bool highRes) const {
     QPixmap rawCrop = m_rawPixmap.copy(rawRect);
 
     if (!highRes) {
-        // Normal resolution for Pinning
-        QPixmap result = rawCrop.scaled(r.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        QPainter p(&result);
-        p.setRenderHint(QPainter::Antialiasing);
+        // Normal resolution (e.g. for Pinning sticker)
+        QImage resultImage(r.size(), QImage::Format_ARGB32_Premultiplied);
+        resultImage.fill(Qt::transparent);
+
+        QPainter p(&resultImage);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+        if (m_selectionShape == SelectionShape::Ellipse) {
+            QPainterPath path;
+            path.addEllipse(QRectF(0, 0, r.width(), r.height()));
+            p.setClipPath(path);
+        }
+
+        p.drawPixmap(0, 0, rawCrop.scaled(r.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
         p.translate(-r.topLeft());
         const_cast<AnnotationLayer *>(m_annotations)->render(p, m_rawImage);
         p.end();
-        return result;
+
+        return QPixmap::fromImage(resultImage);
     }
 
-    // High resolution for OCR and saving
-    QPixmap result(rawCrop.size());
-    QPainter p(&result);
-    p.setRenderHint(QPainter::Antialiasing);
+    // High resolution (for Saving as Transparent PNG, Copying, and OCR)
+    QImage resultImage(rawCrop.size(), QImage::Format_ARGB32_Premultiplied);
+    resultImage.fill(Qt::transparent);
+
+    QPainter p(&resultImage);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    if (m_selectionShape == SelectionShape::Ellipse) {
+        QPainterPath path;
+        path.addEllipse(QRectF(0, 0, rawCrop.width(), rawCrop.height()));
+        p.setClipPath(path);
+    }
+
     p.drawPixmap(0, 0, rawCrop);
     p.scale(m_scaleX, m_scaleY);
     p.translate(-r.topLeft());
     const_cast<AnnotationLayer *>(m_annotations)->render(p, m_rawImage);
     p.end();
 
-    return result;
+    return QPixmap::fromImage(resultImage);
 }
 
 void CaptureOverlay::onCopy() {
@@ -467,6 +553,9 @@ void CaptureOverlay::onSave() {
     QString filePath = QFileDialog::getSaveFileName(this, "保存截图", defaultPath + "/" + fileName, "PNG 图像 (*.png);;JPEG 图像 (*.jpg)");
 
     if (!filePath.isEmpty()) {
+        if (!filePath.endsWith(".png", Qt::CaseInsensitive) && !filePath.endsWith(".jpg", Qt::CaseInsensitive) && !filePath.endsWith(".jpeg", Qt::CaseInsensitive)) {
+            filePath += ".png";
+        }
         result.save(filePath);
     }
     emit overlayClosed();
