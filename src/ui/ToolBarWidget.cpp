@@ -13,8 +13,8 @@ ToolBarWidget::ToolBarWidget(QWidget *parent)
 
 void ToolBarWidget::setupUI() {
     m_rootLayout = new QVBoxLayout(this);
-    m_rootLayout->setContentsMargins(0, 0, 0, 0);
-    m_rootLayout->setSpacing(3);
+    m_rootLayout->setContentsMargins(0, 0, 0, 2);
+    m_rootLayout->setSpacing(4);
 
     m_mainBar = new QWidget(this);
     m_mainBar->setObjectName("mainBar");
@@ -156,10 +156,57 @@ void ToolBarWidget::setupUI() {
     adjustSize();
 }
 
+class ColorSwatchButton : public QPushButton {
+public:
+    ColorSwatchButton(const QColor &color, QWidget *parent = nullptr)
+        : QPushButton(parent), m_color(color) {
+        setFixedSize(22, 22);
+        setCursor(Qt::PointingHandCursor);
+        setCheckable(true);
+    }
+
+    QColor color() const { return m_color; }
+
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+
+        // Safe margin: 16x16 circle centered inside 22x22 widget area
+        QRectF circleRect(3.0, 3.0, 16.0, 16.0);
+
+        // Fill circle
+        p.setPen(Qt::NoPen);
+        p.setBrush(m_color);
+        p.drawEllipse(circleRect);
+
+        // Border around circle
+        if (m_color == Qt::white) {
+            p.setPen(QPen(QColor(160, 160, 160), 1.2));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(circleRect);
+        } else {
+            p.setPen(QPen(QColor(255, 255, 255, 80), 1.0));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(circleRect);
+        }
+
+        // Selected state: draw crisp outer ring
+        if (isChecked()) {
+            p.setPen(QPen(QColor(0, 122, 255), 2.0));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(QRectF(1.0, 1.0, 20.0, 20.0));
+        }
+    }
+
+private:
+    QColor m_color;
+};
+
 void ToolBarWidget::setupSubBar() {
     m_subBar = new QWidget(this);
     m_subBar->setObjectName("subBar");
-    m_subBar->setFixedHeight(28);
+    m_subBar->setFixedHeight(34);
     m_subBar->setStyleSheet(
         "#subBar {"
         "   background-color: rgba(30, 30, 34, 0.95);"
@@ -169,8 +216,8 @@ void ToolBarWidget::setupSubBar() {
     );
 
     auto *subLayout = new QHBoxLayout(m_subBar);
-    subLayout->setContentsMargins(6, 2, 6, 2);
-    subLayout->setSpacing(5);
+    subLayout->setContentsMargins(8, 4, 8, 4);
+    subLayout->setSpacing(6);
 
     // Color Swatches
     QList<QColor> colors = {
@@ -182,12 +229,14 @@ void ToolBarWidget::setupSubBar() {
         QColor(28, 28, 30)     // Black
     };
 
-    for (const auto &color : colors) {
-        auto *btn = new QPushButton(m_subBar);
-        btn->setFixedSize(16, 16);
-        btn->setCursor(Qt::PointingHandCursor);
-        QString border = (color == QColor(255, 255, 255)) ? "border: 1px solid #999;" : "border: 1px solid rgba(255,255,255,0.4);";
-        btn->setStyleSheet(QString("background-color: %1; border-radius: 8px; %2").arg(color.name()).arg(border));
+    auto *colorGroup = new QButtonGroup(this);
+    colorGroup->setExclusive(true);
+
+    for (int i = 0; i < colors.size(); ++i) {
+        const auto &color = colors[i];
+        auto *btn = new ColorSwatchButton(color, m_subBar);
+        if (i == 0) btn->setChecked(true); // Default to red
+        colorGroup->addButton(btn);
         connect(btn, &QPushButton::clicked, [this, color]() {
             emit colorChanged(color);
         });
@@ -200,19 +249,28 @@ void ToolBarWidget::setupSubBar() {
     subLayout->addWidget(sep);
 
     // Stroke width buttons
+    auto *widthGroup = new QButtonGroup(this);
+    widthGroup->setExclusive(true);
+
     QList<QPair<QString, int>> widths = {{"细", 2}, {"中", 4}, {"粗", 6}};
-    for (const auto &pair : widths) {
+    for (int i = 0; i < widths.size(); ++i) {
+        const auto &pair = widths[i];
         auto *btn = new QPushButton(pair.first, m_subBar);
-        btn->setFixedSize(26, 20);
+        btn->setFixedSize(28, 22);
+        btn->setCheckable(true);
+        if (pair.second == 4) btn->setChecked(true); // Default to medium
+        widthGroup->addButton(btn);
         btn->setStyleSheet(
             "QPushButton {"
             "   background: rgba(255,255,255,0.1);"
-            "   color: white;"
+            "   color: #ECECEC;"
             "   font-size: 11px;"
-            "   border-radius: 3px;"
+            "   font-weight: bold;"
+            "   border-radius: 4px;"
             "   border: none;"
             "}"
             "QPushButton:hover { background: rgba(255,255,255,0.25); }"
+            "QPushButton:checked { background: #007AFF; color: white; }"
         );
         connect(btn, &QPushButton::clicked, [this, w = pair.second]() {
             emit strokeWidthChanged(w);
