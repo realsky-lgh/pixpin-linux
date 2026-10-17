@@ -22,10 +22,26 @@ int main(int argc, char *argv[]) {
 
     QCommandLineOption captureOption(QStringList() << "c" << "capture", "立即启动截屏 (可绑定全局快捷键)");
     QCommandLineOption pinOption(QStringList() << "p" << "pin", "直接贴出剪贴板中的图片");
+    QCommandLineOption ocrOption(QStringList() << "o" << "ocr", "识别指定图片文件的文字", "file");
     parser.addOption(captureOption);
     parser.addOption(pinOption);
+    parser.addOption(ocrOption);
 
     parser.process(app);
+
+    if (parser.isSet(ocrOption)) {
+        QString filePath = parser.value(ocrOption);
+        QImage img(filePath);
+        if (img.isNull()) {
+            qCritical() << "无法加载图片:" << filePath;
+            return 1;
+        }
+        OcrEngine engine;
+        QString text = engine.recognizeText(img);
+        QTextStream out(stdout);
+        out << text << "\n";
+        return 0;
+    }
 
     QString serverName = QString("pixpin_linux_ipc_%1").arg(getuid());
 
