@@ -27,7 +27,7 @@
 
 ## 📦 下载与安装
 
-已提供主流 Linux 发行版的预编译安装包（位于 [Releases 页面](https://github.com/realsky/pixpin-linux/releases) 或本地 `releases/` 目录）：
+已提供主流 Linux 发行版的预编译安装包（位于 [Releases 页面](https://github.com/realsky-lgh/pixpin-linux/releases) 或本地 `releases/` 目录）：
 
 ### 1. Ubuntu / Debian / Linux Mint / Deepin / UOS (`.deb`)
 

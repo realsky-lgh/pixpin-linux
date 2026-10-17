@@ -24,7 +24,7 @@ public:
 private slots:
     void onScreenCaptured(const QPixmap &pixmap);
     void onCaptureFailed(const QString &reason);
-    void onPinRequested(const QPixmap &pixmap);
+    void onPinRequested(const QPixmap &pixmap, const QPoint &pos = QPoint());
     void onOcrRequested(const QPixmap &pixmap);
 
 private:

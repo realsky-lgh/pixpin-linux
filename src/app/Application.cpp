@@ -47,7 +47,8 @@ void Application::pinFromClipboard() {
         QMessageBox::information(nullptr, "PixPin 提示", "剪贴板中没有可用的图像数据。");
         return;
     }
-    onPinRequested(pixmap);
+    QPoint pos = QCursor::pos() - QPoint(pixmap.width() / 2, pixmap.height() / 2);
+    onPinRequested(pixmap, pos);
 }
 
 void Application::onScreenCaptured(const QPixmap &pixmap) {
@@ -112,10 +113,13 @@ void Application::onCaptureFailed(const QString &reason) {
     }
 }
 
-void Application::onPinRequested(const QPixmap &pixmap) {
+void Application::onPinRequested(const QPixmap &pixmap, const QPoint &pos) {
     if (pixmap.isNull()) return;
 
     auto *pinWin = new PinWindow(pixmap);
+    if (!pos.isNull()) {
+        pinWin->move(pos);
+    }
     connect(pinWin, &PinWindow::ocrRequested, this, &Application::onOcrRequested);
     m_pinWindows.append(pinWin);
 

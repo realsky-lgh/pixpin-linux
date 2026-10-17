@@ -564,7 +564,9 @@ void CaptureOverlay::onSave() {
 void CaptureOverlay::onPin() {
     QPixmap result = getComposedPixmap(false);
     if (!result.isNull()) {
-        emit pinRequested(result);
+        QRect r = m_selectedRect.normalized();
+        QPoint globalPos = m_screen->geometry().topLeft() + r.topLeft();
+        emit pinRequested(result, globalPos);
     }
     emit overlayClosed();
 }

@@ -9,6 +9,7 @@
 #include <QFileDialog>
 #include <QDateTime>
 #include <QStandardPaths>
+#include <QWindow>
 #include <algorithm>
 
 PinWindow::PinWindow(const QPixmap &pixmap, QWidget *parent)
@@ -17,6 +18,7 @@ PinWindow::PinWindow(const QPixmap &pixmap, QWidget *parent)
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_DeleteOnClose);
     setMouseTracking(true);
+    setCursor(Qt::SizeAllCursor);
 
     resize(m_originalPixmap.size());
 }
@@ -47,8 +49,17 @@ void PinWindow::paintEvent(QPaintEvent *) {
 
 void PinWindow::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
-        m_isDragging = true;
         m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+        m_dragStartPosition = event->globalPosition().toPoint();
+        m_isDragging = true;
+        setCursor(Qt::ClosedHandCursor);
+
+        // Native Wayland/X11 compositor move support
+        if (windowHandle() && windowHandle()->startSystemMove()) {
+            event->accept();
+            return;
+        }
+
         event->accept();
     }
 }
@@ -63,8 +74,16 @@ void PinWindow::mouseMoveEvent(QMouseEvent *event) {
 void PinWindow::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         m_isDragging = false;
+        setCursor(Qt::SizeAllCursor);
         event->accept();
     }
+}
+
+void PinWindow::enterEvent(QEnterEvent *event) {
+    if (!m_isDragging) {
+        setCursor(Qt::SizeAllCursor);
+    }
+    QWidget::enterEvent(event);
 }
 
 void PinWindow::wheelEvent(QWheelEvent *event) {

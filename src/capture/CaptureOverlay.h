@@ -45,7 +45,7 @@ public:
     void toggleSelectionShape();
 
 signals:
-    void pinRequested(const QPixmap &pixmap);
+    void pinRequested(const QPixmap &pixmap, const QPoint &pos = QPoint());
     void ocrRequested(const QPixmap &pixmap);
     void selectionStarted(CaptureOverlay *sender);
     void overlayClosed();

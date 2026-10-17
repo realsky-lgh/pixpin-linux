@@ -24,6 +24,7 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
 
 private:
     void copyToClipboard();
@@ -34,5 +35,6 @@ private:
     qreal m_opacity = 1.0;
     bool m_isDragging = false;
     QPoint m_dragPosition;
+    QPoint m_dragStartPosition;
     bool m_alwaysOnTop = true;
 };
