@@ -114,6 +114,8 @@ void PinWindow::keyPressEvent(QKeyEvent *event) {
         copyToClipboard();
     } else if (event->key() == Qt::Key_S && (event->modifiers() & Qt::ControlModifier)) {
         saveToFile();
+    } else if (event->key() == Qt::Key_C && (event->modifiers() & Qt::ShiftModifier)) {
+        emit ocrRequested(m_originalPixmap);
     } else {
         QWidget::keyPressEvent(event);
     }
@@ -141,7 +143,7 @@ void PinWindow::contextMenuEvent(QContextMenuEvent *event) {
 
     auto *copyAct = menu.addAction("📋 复制图片 (Ctrl+C)");
     auto *saveAct = menu.addAction("💾 保存图片... (Ctrl+S)");
-    auto *ocrAct = menu.addAction("🔤 提取文字 (OCR)");
+    auto *ocrAct = menu.addAction("🔤 提取文字 (Shift+C)");
     menu.addSeparator();
 
     auto *zoom100Act = menu.addAction("🔍 缩放: 100%");

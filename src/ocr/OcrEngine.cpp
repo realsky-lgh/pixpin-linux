@@ -14,7 +14,7 @@
 OcrEngine::OcrEngine(QObject *parent)
     : QObject(parent)
     , m_tessApi(std::make_unique<tesseract::TessBaseAPI>()) {
-    initialize("chi_sim+eng");
+    initialize("chi_sim+chi_tra+eng");
     startRapidOcrWorker();
 }
 
@@ -101,20 +101,71 @@ void OcrEngine::startRapidOcrWorker() {
 bool OcrEngine::initialize(const QString &languages) {
     if (!m_tessApi) return false;
 
-    int ret = m_tessApi->Init(nullptr, languages.toUtf8().constData(), tesseract::OEM_LSTM_ONLY);
-    if (ret != 0) {
-        ret = m_tessApi->Init(nullptr, "eng", tesseract::OEM_LSTM_ONLY);
+    QStringList candidateDirs = {
+        QDir::homePath() + "/.local/share/pixpin/tessdata",
+        QCoreApplication::applicationDirPath() + "/../share/pixpin/tessdata",
+        QCoreApplication::applicationDirPath() + "/../resources/tessdata",
+        QCoreApplication::applicationDirPath() + "/resources/tessdata",
+        "/usr/share/pixpin/tessdata",
+        "/usr/local/share/pixpin/tessdata",
+        "/usr/share/tesseract-ocr/5/tessdata",
+        "/usr/share/tesseract-ocr/4.00/tessdata",
+        "/usr/share/tessdata"
+    };
+
+    QString tessdataDir;
+    for (const QString &dir : candidateDirs) {
+        if (QFileInfo::exists(dir + "/chi_tra.traineddata")) {
+            tessdataDir = dir;
+            break;
+        } else if (tessdataDir.isEmpty() && (QFileInfo::exists(dir + "/chi_sim.traineddata") || QFileInfo::exists(dir + "/eng.traineddata"))) {
+            tessdataDir = dir;
+        }
     }
 
-    if (ret == 0) {
-        m_tessApi->SetVariable("user_defined_dpi", "300");
-        m_tessApi->SetPageSegMode(tesseract::PSM_AUTO);
-        m_tessInitialized = true;
-    } else {
-        m_tessInitialized = false;
+    const char *datapath = tessdataDir.isEmpty() ? nullptr : tessdataDir.toUtf8().constData();
+
+    bool hasTra = !tessdataDir.isEmpty() && QFileInfo::exists(tessdataDir + "/chi_tra.traineddata");
+    bool hasSim = !tessdataDir.isEmpty() && QFileInfo::exists(tessdataDir + "/chi_sim.traineddata");
+    bool hasEng = !tessdataDir.isEmpty() && QFileInfo::exists(tessdataDir + "/eng.traineddata");
+
+    QStringList langOrder;
+    if (hasSim && hasTra && hasEng) {
+        langOrder << "chi_sim+chi_tra+eng";
+    } else if (hasTra && hasEng) {
+        langOrder << "chi_tra+eng";
+    } else if (hasSim && hasEng) {
+        langOrder << "chi_sim+eng";
+    }
+    langOrder << languages << "chi_sim+chi_tra+eng" << "chi_tra+eng" << "chi_sim+eng" << "eng";
+    langOrder.removeDuplicates();
+
+    int ret = -1;
+    for (const QString &lang : langOrder) {
+        ret = m_tessApi->Init(datapath, lang.toUtf8().constData(), tesseract::OEM_LSTM_ONLY);
+        if (ret == 0) {
+            qDebug() << "Tesseract initialized successfully with datapath:" << (datapath ? datapath : "(system default)") << "languages:" << lang;
+            m_tessInitialized = true;
+            m_tessApi->SetPageSegMode(tesseract::PSM_AUTO);
+            return true;
+        }
     }
 
-    return m_tessInitialized;
+    // Fallback: try default system path if custom datapath failed
+    if (datapath != nullptr) {
+        for (const QString &lang : QStringList{"chi_sim+chi_tra+eng", "chi_tra+eng", "chi_sim+eng", "eng"}) {
+            ret = m_tessApi->Init(nullptr, lang.toUtf8().constData(), tesseract::OEM_LSTM_ONLY);
+            if (ret == 0) {
+                qDebug() << "Tesseract initialized with system path, lang:" << lang;
+                m_tessInitialized = true;
+                m_tessApi->SetPageSegMode(tesseract::PSM_AUTO);
+                return true;
+            }
+        }
+    }
+
+    m_tessInitialized = false;
+    return false;
 }
 
 namespace {
@@ -184,85 +235,32 @@ QString OcrEngine::recognizeWithTesseract(const QImage &image) {
         processed = processed.scaled(processed.size() * 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
-    QImage gray = processed.convertToFormat(QImage::Format_Grayscale8);
+    QImage rgb = processed.convertToFormat(QImage::Format_RGB888);
 
-    // Contrast stretch and dark mode normalization
-    uchar minVal = 255;
-    uchar maxVal = 0;
-    quint64 totalLuma = 0;
-    int pixelCount = gray.width() * gray.height();
-
-    for (int y = 0; y < gray.height(); ++y) {
-        const uchar *line = gray.scanLine(y);
-        for (int x = 0; x < gray.width(); ++x) {
-            uchar v = line[x];
-            totalLuma += v;
-            if (v < minVal) minVal = v;
-            if (v > maxVal) maxVal = v;
-        }
-    }
-
-    double meanLuma = (double)totalLuma / pixelCount;
-    if (meanLuma < 125.0) {
-        gray.invertPixels();
-        uchar oldMin = minVal;
-        minVal = 255 - maxVal;
-        maxVal = 255 - oldMin;
-    }
-
-    if (maxVal > minVal && (maxVal - minVal) < 200) {
-        for (int y = 0; y < gray.height(); ++y) {
-            uchar *line = gray.scanLine(y);
-            for (int x = 0; x < gray.width(); ++x) {
-                int stretched = (line[x] - minVal) * 255 / (maxVal - minVal);
-                line[x] = static_cast<uchar>(std::clamp(stretched, 0, 255));
-            }
-        }
-    }
-
-    m_tessApi->SetImage(gray.bits(), gray.width(), gray.height(), 1, gray.bytesPerLine());
-    m_tessApi->SetSourceResolution(300);
+    m_tessApi->SetImage(rgb.bits(), rgb.width(), rgb.height(), 3, rgb.bytesPerLine());
     m_tessApi->Recognize(nullptr);
 
-    tesseract::ResultIterator *ri = m_tessApi->GetIterator();
-    QStringList finalLines;
+    char *utf8Text = m_tessApi->GetUTF8Text();
+    QString result;
+    if (utf8Text) {
+        result = QString::fromUtf8(utf8Text).trimmed();
+        delete[] utf8Text;
+    }
+    m_tessApi->Clear();
 
-    if (ri) {
-        do {
-            QString lineText;
-            do {
-                const char *word = ri->GetUTF8Text(tesseract::RIL_WORD);
-                float conf = ri->Confidence(tesseract::RIL_WORD);
-
-                if (word) {
-                    QString w = QString::fromUtf8(word).trimmed();
-                    delete[] word;
-
-                    int wx1, wy1, wx2, wy2;
-                    ri->BoundingBox(tesseract::RIL_WORD, &wx1, &wy1, &wx2, &wy2);
-                    int wordW = wx2 - wx1;
-                    int wordH = wy2 - wy1;
-
-                    if (conf < 38.0f) continue;
-                    if (w.length() <= 2 && (wordW > 45 && wordH > 45)) continue;
-
-                    if (!lineText.isEmpty()) lineText += " ";
-                    lineText += w;
-                }
-
-                if (ri->IsAtFinalElement(tesseract::RIL_TEXTLINE, tesseract::RIL_WORD)) break;
-            } while (ri->Next(tesseract::RIL_WORD));
-
-            lineText = formatCjkText(lineText.trimmed());
-            if (lineText.length() == 1 && !lineText[0].isLetterOrNumber()) continue;
-            if (!lineText.isEmpty()) {
-                finalLines.append(lineText);
-            }
-        } while (ri->Next(tesseract::RIL_TEXTLINE));
+    if (result.isEmpty()) {
+        return QString();
     }
 
-    m_tessApi->Clear();
-    return finalLines.join("\n").trimmed();
+    QStringList lines = result.split('\n');
+    QStringList cleanLines;
+    for (const QString &line : lines) {
+        QString trimmed = formatCjkText(line.trimmed());
+        if (!trimmed.isEmpty()) {
+            cleanLines.append(trimmed);
+        }
+    }
+    return cleanLines.join("\n").trimmed();
 }
 
 QString OcrEngine::recognizeText(const QImage &image) {
@@ -278,7 +276,15 @@ QString OcrEngine::recognizeText(const QImage &image) {
         processed = whiteBg;
     }
 
-    // Prefer RapidOCR (PaddleOCR/ONNX) for state-of-the-art scene/graphics text detection
+    // Try Tesseract first (supports Simplified + Traditional Chinese + English at native speed)
+    if (m_tessInitialized) {
+        QString text = recognizeWithTesseract(processed);
+        if (!text.isEmpty()) {
+            return text;
+        }
+    }
+
+    // Fallback: RapidOCR (PaddleOCR/ONNX) for complex natural scenes / stylized text
     if (m_rapidOcrAvailable) {
         QString text = recognizeWithRapidOcr(processed);
         if (!text.isEmpty()) {
@@ -286,8 +292,7 @@ QString OcrEngine::recognizeText(const QImage &image) {
         }
     }
 
-    // Fallback to Tesseract
-    return recognizeWithTesseract(processed);
+    return QString();
 }
 
 QString OcrEngine::recognizeText(const QPixmap &pixmap) {

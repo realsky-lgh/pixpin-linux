@@ -36,6 +36,12 @@ install -m 644 "$DIR/share/icons/hicolor/scalable/apps/pixpin.svg" "$ICON_DIR/pi
 # Install OCR worker script
 install -m 755 "$DIR/share/pixpin/ocr_worker.py" "$SHARE_DIR/ocr_worker.py"
 
+# Install tessdata (Traditional & Simplified Chinese, English)
+if [ -d "$DIR/share/pixpin/tessdata" ]; then
+    mkdir -p "$SHARE_DIR/tessdata"
+    cp -rf "$DIR/share/pixpin/tessdata/"* "$SHARE_DIR/tessdata/"
+fi
+
 # Update desktop database and icon caches if available
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true

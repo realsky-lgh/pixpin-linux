@@ -17,7 +17,7 @@ public:
     explicit OcrEngine(QObject *parent = nullptr);
     ~OcrEngine() override;
 
-    bool initialize(const QString &languages = "chi_sim+eng");
+    bool initialize(const QString &languages = "chi_sim+chi_tra+eng");
     QString recognizeText(const QImage &image);
     QString recognizeText(const QPixmap &pixmap);
 

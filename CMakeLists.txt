@@ -82,6 +82,10 @@ install(FILES src/ocr/ocr_worker.py
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
 
+install(DIRECTORY resources/tessdata/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/pixpin/tessdata
+)
+
 # CPack configuration
 set(CPACK_PACKAGE_NAME "pixpin")
 set(CPACK_PACKAGE_VENDOR "realsky")

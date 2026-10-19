@@ -64,7 +64,7 @@ void ToolBarWidget::setupUI() {
 
     // Primary Action Tools
     m_btnPin = createToolButton("📌", "贴图 (Ctrl+P / 钉在屏幕上)");
-    m_btnOcr = createToolButton("🔤", "提取文字 (离线快速 OCR)");
+    m_btnOcr = createToolButton("🔤", "提取文字 (Shift+C / 离线 OCR)");
 
     // Separator line
     auto *sep1 = new QFrame(this);

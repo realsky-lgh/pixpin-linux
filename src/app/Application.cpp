@@ -134,11 +134,15 @@ void Application::onOcrRequested(const QPixmap &pixmap) {
     if (pixmap.isNull()) return;
 
     QString recognized = m_ocrEngine->recognizeText(pixmap);
-    if (recognized.isEmpty()) {
+    bool hasText = !recognized.trimmed().isEmpty();
+    if (!hasText) {
         recognized = "(未识别出清晰文本)";
+    } else {
+        // Automatically copy recognized text directly to clipboard
+        QApplication::clipboard()->setText(recognized);
     }
 
-    auto *dialog = new OcrResultDialog(recognized);
+    auto *dialog = new OcrResultDialog(recognized, hasText);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->show();
 }

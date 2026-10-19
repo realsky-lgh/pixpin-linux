@@ -8,12 +8,15 @@
 #include <QDateTime>
 #include <QStandardPaths>
 
-OcrResultDialog::OcrResultDialog(const QString &text, QWidget *parent)
+#include <QShortcut>
+#include <QKeyEvent>
+
+OcrResultDialog::OcrResultDialog(const QString &text, bool autoCopied, QWidget *parent)
     : QDialog(parent) {
     setWindowTitle("PixPin - 离线文字识别 (OCR)");
-    resize(520, 380);
+    resize(560, 400);
     setupUI();
-    setText(text);
+    setText(text, autoCopied);
 }
 
 void OcrResultDialog::setupUI() {
@@ -61,12 +64,15 @@ void OcrResultDialog::setupUI() {
     rootLayout->setContentsMargins(16, 16, 16, 16);
     rootLayout->setSpacing(12);
 
-    auto *titleLabel = new QLabel("🔤 识别结果 (可直接编辑修改)：", this);
+    auto *titleLabel = new QLabel("🔤 识别结果 (支持简繁中文及英文，可直接编辑修改)：", this);
     titleLabel->setStyleSheet("font-weight: bold; font-size: 14px; color: #FFFFFF;");
     rootLayout->addWidget(titleLabel);
 
     m_textEdit = new QPlainTextEdit(this);
-    connect(m_textEdit, &QPlainTextEdit::textChanged, this, &OcrResultDialog::updateStats);
+    connect(m_textEdit, &QPlainTextEdit::textChanged, [this]() {
+        m_btnCopyAll->setText("📋 复制全部 (Shift+C)");
+        updateStats();
+    });
     rootLayout->addWidget(m_textEdit);
 
     auto *bottomLayout = new QHBoxLayout();
@@ -76,10 +82,10 @@ void OcrResultDialog::setupUI() {
     bottomLayout->addWidget(m_statusLabel);
     bottomLayout->addStretch();
 
-    m_btnCopyAll = new QPushButton("📋 复制全部", this);
+    m_btnCopyAll = new QPushButton("📋 复制全部 (Shift+C)", this);
     m_btnCopyAll->setObjectName("btnCopyAll");
     m_btnSave = new QPushButton("💾 保存为 .txt", this);
-    m_btnClose = new QPushButton("关闭", this);
+    m_btnClose = new QPushButton("关闭 (Esc)", this);
 
     bottomLayout->addWidget(m_btnCopyAll);
     bottomLayout->addWidget(m_btnSave);
@@ -87,11 +93,18 @@ void OcrResultDialog::setupUI() {
 
     rootLayout->addLayout(bottomLayout);
 
-    connect(m_btnCopyAll, &QPushButton::clicked, [this]() {
-        QApplication::clipboard()->setText(m_textEdit->toPlainText());
-        m_btnCopyAll->setText("✅ 已复制！");
-        m_btnCopyAll->setEnabled(false);
+    connect(m_btnCopyAll, &QPushButton::clicked, this, &OcrResultDialog::copyAll);
+
+    // Global dialog shortcuts for copying text
+    auto *copyShortcut = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_C), this);
+    connect(copyShortcut, &QShortcut::activated, [this]() {
+        if (!m_textEdit->hasFocus()) {
+            copyAll();
+        }
     });
+
+    auto *ctrlShiftC = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this);
+    connect(ctrlShiftC, &QShortcut::activated, this, &OcrResultDialog::copyAll);
 
     connect(m_btnSave, &QPushButton::clicked, [this]() {
         QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
@@ -109,9 +122,28 @@ void OcrResultDialog::setupUI() {
     connect(m_btnClose, &QPushButton::clicked, this, &QDialog::accept);
 }
 
-void OcrResultDialog::setText(const QString &text) {
+void OcrResultDialog::setText(const QString &text, bool autoCopied) {
     m_textEdit->setPlainText(text);
     updateStats();
+    if (autoCopied) {
+        m_btnCopyAll->setText("✅ 已自动复制！(Shift+C)");
+    } else {
+        m_btnCopyAll->setText("📋 复制全部 (Shift+C)");
+    }
+}
+
+void OcrResultDialog::copyAll() {
+    QApplication::clipboard()->setText(m_textEdit->toPlainText());
+    m_btnCopyAll->setText("✅ 已复制到剪贴板！(Shift+C)");
+}
+
+void OcrResultDialog::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_C && (event->modifiers() & Qt::ShiftModifier) && !m_textEdit->hasFocus()) {
+        copyAll();
+        event->accept();
+        return;
+    }
+    QDialog::keyPressEvent(event);
 }
 
 void OcrResultDialog::updateStats() {

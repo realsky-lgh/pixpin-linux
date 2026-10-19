@@ -34,4 +34,11 @@ elif [ -f "/usr/share/pixpin/ocr_worker.py" ]; then
     cp -f "/usr/share/pixpin/ocr_worker.py" "$INSTALL_DIR/ocr_worker.py"
 fi
 
-echo "=== 安装完成！PixPin 现已支持基于 PaddleOCR ONNX 的高精度离线文字识别 ==="
+# Copy tessdata (Traditional Chinese chi_tra, chi_sim, eng)
+TESSDATA_SRC="$(dirname "$0")/../resources/tessdata"
+if [ -d "$TESSDATA_SRC" ]; then
+    mkdir -p "$INSTALL_DIR/tessdata"
+    cp -rf "$TESSDATA_SRC/"* "$INSTALL_DIR/tessdata/"
+fi
+
+echo "=== 安装完成！PixPin 现已支持繁体/简体中文及英文高精度离线文字识别 ==="

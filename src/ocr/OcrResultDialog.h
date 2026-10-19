@@ -8,9 +8,13 @@
 class OcrResultDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit OcrResultDialog(const QString &text, QWidget *parent = nullptr);
+    explicit OcrResultDialog(const QString &text, bool autoCopied = false, QWidget *parent = nullptr);
 
-    void setText(const QString &text);
+    void setText(const QString &text, bool autoCopied = false);
+    void copyAll();
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
     void setupUI();

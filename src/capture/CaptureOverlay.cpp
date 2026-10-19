@@ -467,6 +467,11 @@ void CaptureOverlay::keyPressEvent(QKeyEvent *event) {
         onSave();
     } else if (event->key() == Qt::Key_P && (event->modifiers() & Qt::ControlModifier)) {
         onPin();
+    } else if (event->key() == Qt::Key_C && (event->modifiers() & Qt::ShiftModifier)) {
+        if (!m_selectedRect.isValid() || m_selectedRect.isEmpty()) {
+            m_selectedRect = rect();
+        }
+        onOcr();
     } else if (event->key() == Qt::Key_Z && (event->modifiers() & Qt::ControlModifier)) {
         m_annotations->undo();
         update();
