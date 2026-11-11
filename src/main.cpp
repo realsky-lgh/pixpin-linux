@@ -17,15 +17,18 @@ int main(int argc, char *argv[]) {
     // If so, write the command and exit in < 0.1ms without loading Qt GUI, Wayland, fonts or theme engines!
     bool quickCapture = false;
     bool quickPin = false;
+    bool quickClose = false;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--capture") == 0) {
             quickCapture = true;
         } else if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--pin") == 0) {
             quickPin = true;
+        } else if (strcmp(argv[i], "--close") == 0 || strcmp(argv[i], "-q") == 0) {
+            quickClose = true;
         }
     }
 
-    if (quickCapture || quickPin) {
+    if (quickCapture || quickPin || quickClose) {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if (sock >= 0) {
             struct sockaddr_un addr;
@@ -34,7 +37,7 @@ int main(int argc, char *argv[]) {
             snprintf(addr.sun_path, sizeof(addr.sun_path), "/tmp/pixpin_linux_ipc_%d", getuid());
 
             if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-                const char *cmd = quickPin ? "pin\n" : "capture\n";
+                const char *cmd = quickClose ? "close\n" : (quickPin ? "pin\n" : "capture\n");
                 ssize_t len = strlen(cmd);
                 if (write(sock, cmd, len) == len) {
                     close(sock);
@@ -120,6 +123,8 @@ int main(int argc, char *argv[]) {
                     application.triggerCapture();
                 } else if (cmd == "pin") {
                     application.pinFromClipboard();
+                } else if (cmd == "close" || cmd == "esc") {
+                    application.closeAllOverlays();
                 }
             });
         }

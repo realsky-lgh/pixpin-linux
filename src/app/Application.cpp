@@ -76,6 +76,7 @@ static QElapsedTimer s_totalCaptureTimer;
 
 void Application::triggerCapture() {
     s_totalCaptureTimer.restart();
+    QGuiApplication::setOverrideCursor(Qt::CrossCursor);
     closeAllOverlays();
     m_capturer->capture();
 }
@@ -98,6 +99,7 @@ void Application::pinFromClipboard() {
 }
 
 void Application::onScreenCaptured(const QImage &image) {
+    QGuiApplication::restoreOverrideCursor();
     if (image.isNull()) {
         onCaptureFailed("捕获到的屏幕图像为空");
         return;
@@ -144,6 +146,7 @@ void Application::onScreenCaptured(const QImage &image) {
 }
 
 void Application::onCaptureFailed(const QString &reason) {
+    QGuiApplication::restoreOverrideCursor();
     qWarning() << "Capture failed:" << reason;
     if (m_tray) {
         m_tray->showMessage("PixPin 截图失败", reason, QSystemTrayIcon::Warning, 3000);

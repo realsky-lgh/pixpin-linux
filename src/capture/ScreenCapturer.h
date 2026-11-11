@@ -26,13 +26,16 @@ signals:
 
 public slots:
     void onPortalResponse(uint response, const QVariantMap &results);
+    void onMutterPipeWireStreamAdded(uint nodeId);
 
 private:
     void captureX11();
     void captureWayland();
+    bool captureMutterPipeWire();
 
     std::unique_ptr<QDBusInterface> m_portal;
     bool m_dbusConnected = false;
     bool m_isCapturing = false;
     QString m_requestPath;
+    uint m_mutterNodeId = 0;
 };

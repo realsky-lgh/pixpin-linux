@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(pixpin VERSION 1.0.8 LANGUAGES CXX)
+project(pixpin VERSION 1.0.9 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,11 +11,18 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets DBus Svg Network)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TESS REQUIRED tesseract lept)
+pkg_check_modules(PIPEWIRE libpipewire-0.3)
 
 include_directories(
     src
     ${TESS_INCLUDE_DIRS}
 )
+
+if (PIPEWIRE_FOUND)
+    message(STATUS "PipeWire found: ${PIPEWIRE_VERSION}")
+    add_compile_definitions(HAVE_PIPEWIRE=1)
+    include_directories(${PIPEWIRE_INCLUDE_DIRS})
+endif()
 
 set(SOURCES
     src/main.cpp
@@ -56,6 +63,7 @@ target_link_libraries(pixpin PRIVATE
     Qt6::Svg
     Qt6::Network
     ${TESS_LIBRARIES}
+    ${PIPEWIRE_LIBRARIES}
 )
 
 target_compile_definitions(pixpin PRIVATE
@@ -97,7 +105,7 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 # Debian packaging
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "realsky")
 set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libqt6core6, libqt6gui6, libqt6widgets6, libqt6dbus6, libqt6svg6, libqt6network6, libtesseract5, liblept5")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libqt6core6, libqt6gui6, libqt6widgets6, libqt6dbus6, libqt6svg6, libqt6network6, libtesseract5, liblept5, libpipewire-0.3-0t64 | libpipewire-0.3-0")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "python3, python3-pip")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postinst;${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postrm"
